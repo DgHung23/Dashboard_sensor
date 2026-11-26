@@ -1,0 +1,324 @@
+<!doctype html>
+<html lang="vi" data-theme="dark">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>AquaSense · Giám sát chất lượng nước</title>
+  <meta name="description" content="Hệ thống giám sát pH và độ mặn của nước theo thời gian thực – Applied Robotics Lab (Greenwich Việt Nam) × REMIT Industry Lab." />
+  <meta name="theme-color" content="#061423" />
+  <link rel="icon" type="image/svg+xml" href="assets/img/favicon.svg" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="assets/css/style.css" />
+  <script>
+    // Apply saved theme before paint
+    try { const t = localStorage.getItem('aq-theme'); if (t) document.documentElement.setAttribute('data-theme', t); } catch (e) {}
+  </script>
+</head>
+<body>
+  <!-- Data-driven ambient background -->
+  <div class="ambient" aria-hidden="true">
+    <div class="ambient__blob ambient__blob--a"></div>
+    <div class="ambient__blob ambient__blob--b"></div>
+    <div class="ambient__grid"></div>
+  </div>
+
+  <!-- ============ HEADER ============ -->
+  <header class="topbar">
+    <div class="topbar__inner">
+      <div class="brands">
+        <a class="brand brand--arl" href="https://www.facebook.com/GW.ARLab" target="_blank" rel="noopener" title="Applied Robotics Lab – Greenwich Việt Nam">
+          <img class="brand__emblem only-dark" src="assets/img/arl-emblem-white.svg" alt="ARL" />
+          <img class="brand__emblem only-light" src="assets/img/arl-emblem.svg" alt="ARL" />
+          <span class="brand__text">
+            <strong>Applied Robotics Lab</strong>
+            <small>University of Greenwich Việt Nam</small>
+          </span>
+        </a>
+        <span class="brands__x" aria-hidden="true">×</span>
+        <a class="brand brand--remit" href="https://remit.com.vn/vi" target="_blank" rel="noopener" title="REMIT – Industry Lab">
+          <img class="brand__logo" id="remitLogo" src="assets/img/remit-logo.png" alt="REMIT" onerror="this.classList.add('is-missing')" />
+          <span class="brand__text">
+            <strong>Industry Lab</strong>
+            <small>Viện REMIT</small>
+          </span>
+        </a>
+      </div>
+
+      <div class="topbar__title">
+        <span class="product">Aqua<b>Sense</b></span>
+        <span class="station" id="stationName">Trạm quan trắc</span>
+      </div>
+
+      <div class="topbar__meta">
+        <div class="live-pill" id="livePill"><span class="live-dot"></span><span>TRỰC TUYẾN</span></div>
+        <div class="clock"><span id="clockTime">--:--:--</span><small id="clockDate">--/--/----</small></div>
+        <button class="icon-btn" id="themeToggle" aria-label="Đổi giao diện sáng/tối" title="Đổi giao diện sáng/tối">
+          <svg class="i-sun" viewBox="0 0 24 24" width="18" height="18"><circle cx="12" cy="12" r="4.2" fill="none" stroke="currentColor" stroke-width="2"/><g stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 2v2.5M12 19.5V22M2 12h2.5M19.5 12H22M4.9 4.9l1.8 1.8M17.3 17.3l1.8 1.8M4.9 19.1l1.8-1.8M17.3 6.7l1.8-1.8"/></g></svg>
+          <svg class="i-moon" viewBox="0 0 24 24" width="18" height="18"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5Z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <main class="page">
+
+    <!-- ============ HERO: status + digital twin ============ -->
+    <section class="hero">
+      <article class="card status-card" id="statusCard">
+        <div class="eyebrow">Tình trạng nguồn nước</div>
+        <div class="status-ring">
+          <svg viewBox="0 0 200 200" class="ring" aria-hidden="true">
+            <circle class="ring__track" cx="100" cy="100" r="84" />
+            <circle class="ring__value" id="wqiArc" cx="100" cy="100" r="84" />
+          </svg>
+          <div class="status-ring__center">
+            <span class="wqi" id="wqiValue">--</span>
+            <span class="wqi-label">Chỉ số WQI</span>
+          </div>
+        </div>
+        <div class="status-badge" id="overallBadge"><span class="status-icon"></span><span class="status-text">Đang tải…</span></div>
+        <p class="status-desc" id="overallDesc">Đang đồng bộ dữ liệu từ cảm biến…</p>
+
+        <div class="sync">
+          <div class="sync__row"><span>Lần đo gần nhất</span><b id="lastUpdate">--:--</b></div>
+          <div class="sync__row"><span>Lần đo kế tiếp</span><b id="nextUpdate">--:--</b></div>
+          <div class="sync__bar"><i id="syncProgress"></i></div>
+          <div class="sync__row sync__row--small"><span>Chu kỳ lấy mẫu: 5 phút · Modbus RTU / RS485</span></div>
+        </div>
+      </article>
+
+      <article class="card twin-card">
+        <div class="card__head">
+          <div>
+            <div class="eyebrow">Mô hình mô phỏng</div>
+            <h2>Bể quan trắc &amp; luồng dữ liệu</h2>
+          </div>
+          <div class="legend-chips">
+            <span class="chip"><i style="background:var(--ph-color)"></i>Màu nước ∝ pH</span>
+            <span class="chip"><i class="dot-salt"></i>Hạt muối ∝ độ mặn</span>
+          </div>
+        </div>
+        <div class="twin" id="twin">
+          <!-- SVG built by twin.js -->
+        </div>
+      </article>
+    </section>
+
+    <!-- ============ SENSOR CARDS ============ -->
+    <section class="sensors">
+      <article class="card sensor" id="card-ph" data-sensor="ph">
+        <div class="card__head">
+          <div class="sensor__id">
+            <span class="sensor__icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" width="22" height="22"><path d="M9 2h6M10 2v6.5L5.2 17a3 3 0 0 0 2.6 4.5h8.4a3 3 0 0 0 2.6-4.5L14 8.5V2" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M7.2 15h9.6" stroke="currentColor" stroke-width="1.8"/></svg>
+            </span>
+            <div>
+              <div class="eyebrow">Cảm biến 01 · <span class="model" data-bind="ph.model"></span></div>
+              <h2>Độ pH</h2>
+            </div>
+          </div>
+          <div class="status-badge status-badge--sm" data-status="ph"><span class="status-icon"></span><span class="status-text">--</span></div>
+        </div>
+        <div class="offline-banner" role="status"></div>
+
+        <div class="sensor__body">
+          <div class="gauge gauge--ph" id="gaugePh"></div>
+          <div class="sensor__readout">
+            <div class="big-value"><span class="num" id="valPh">--</span><span class="unit">pH</span></div>
+            <div class="delta" id="deltaPh">--</div>
+            <div class="scale-note" id="notePh">--</div>
+            <dl class="mini-stats">
+              <div><dt>Thấp nhất 24h</dt><dd id="minPh">--</dd></div>
+              <div><dt>Cao nhất 24h</dt><dd id="maxPh">--</dd></div>
+              <div><dt>Trung bình 24h</dt><dd id="avgPh">--</dd></div>
+              <div><dt>Nhiệt độ nước</dt><dd id="tempPh">--</dd></div>
+            </dl>
+          </div>
+        </div>
+        <div class="spark" id="sparkPh" aria-label="Biểu đồ pH 24 giờ"></div>
+      </article>
+
+      <article class="card sensor" id="card-sal" data-sensor="sal">
+        <div class="card__head">
+          <div class="sensor__id">
+            <span class="sensor__icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" width="22" height="22"><path d="M12 2.5S5.5 10 5.5 14.5a6.5 6.5 0 0 0 13 0C18.5 10 12 2.5 12 2.5Z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><g fill="currentColor"><rect x="9" y="13" width="2.2" height="2.2" rx=".4"/><rect x="12.6" y="15.6" width="2.2" height="2.2" rx=".4"/><rect x="12.2" y="11.4" width="1.8" height="1.8" rx=".4"/></g></svg>
+            </span>
+            <div>
+              <div class="eyebrow">Cảm biến 02 · <span class="model" data-bind="sal.model"></span></div>
+              <h2>Độ mặn</h2>
+            </div>
+          </div>
+          <div class="status-badge status-badge--sm" data-status="sal"><span class="status-icon"></span><span class="status-text">--</span></div>
+        </div>
+        <div class="offline-banner" role="status"></div>
+
+        <div class="sensor__body">
+          <div class="gauge gauge--sal" id="gaugeSal"></div>
+          <div class="sensor__readout">
+            <div class="big-value"><span class="num" id="valSal">--</span><span class="unit">‰</span></div>
+            <div class="delta" id="deltaSal">--</div>
+            <div class="scale-note" id="noteSal">--</div>
+            <dl class="mini-stats">
+              <div><dt>Độ dẫn điện (EC)</dt><dd id="ecSal">--</dd></div>
+              <div><dt>Tổng chất rắn hòa tan</dt><dd id="tdsSal">--</dd></div>
+              <div><dt>Biên độ 24h</dt><dd id="rangeSal">--</dd></div>
+              <div><dt>Nhiệt độ nước</dt><dd id="tempSal">--</dd></div>
+            </dl>
+          </div>
+        </div>
+        <div class="spark" id="sparkSal" aria-label="Biểu đồ độ mặn 24 giờ"></div>
+      </article>
+    </section>
+
+    <!-- ============ REALTIME CHARTS ============ -->
+    <section class="card realtime">
+      <div class="card__head">
+        <div>
+          <div class="eyebrow">Thời gian thực</div>
+          <h2>Diễn biến 24 giờ qua</h2>
+        </div>
+        <div class="seg" role="tablist" id="rtRange">
+          <button data-h="6">6 giờ</button>
+          <button data-h="12">12 giờ</button>
+          <button data-h="24" class="is-active">24 giờ</button>
+          <button data-h="72">3 ngày</button>
+        </div>
+      </div>
+      <div class="rt-grid">
+        <div class="chart-block">
+          <div class="chart-title"><i class="swatch swatch--ph"></i>pH <small>· vùng xanh: ngưỡng tối ưu</small></div>
+          <div class="chart" id="rtPh"></div>
+        </div>
+        <div class="chart-block">
+          <div class="chart-title"><i class="swatch swatch--sal"></i>Độ mặn (‰) <small>· vùng xanh: ngưỡng tối ưu</small></div>
+          <div class="chart" id="rtSal"></div>
+        </div>
+        <div class="chart-block chart-block--temp">
+          <div class="chart-title"><i class="swatch swatch--temp"></i>Nhiệt độ nước (°C) <small>· cảm biến bù nhiệt tích hợp</small></div>
+          <div class="chart chart--short" id="rtTemp"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ HISTORY ============ -->
+    <section class="card history" id="history">
+      <div class="card__head card__head--wrap">
+        <div>
+          <div class="eyebrow">Dữ liệu lịch sử</div>
+          <h2>Lưu trữ đến 6 tháng</h2>
+        </div>
+        <div class="history__controls">
+          <div class="seg" id="histMetric">
+            <button data-m="ph" class="is-active">pH</button>
+            <button data-m="sal">Độ mặn</button>
+            <button data-m="temp">Nhiệt độ</button>
+          </div>
+          <div class="seg" id="histRange">
+            <button data-d="7">7 ngày</button>
+            <button data-d="30" class="is-active">1 tháng</button>
+            <button data-d="90">3 tháng</button>
+            <button data-d="180">6 tháng</button>
+          </div>
+          <button class="btn" id="exportCsv">
+            <svg viewBox="0 0 24 24" width="16" height="16"><path d="M12 3v12m0 0-4.5-4.5M12 15l4.5-4.5M4 17v2.5A1.5 1.5 0 0 0 5.5 21h13a1.5 1.5 0 0 0 1.5-1.5V17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            Xuất CSV
+          </button>
+        </div>
+      </div>
+
+      <div class="hist-kpis" id="histKpis"></div>
+
+      <div class="chart chart--tall" id="histChart"></div>
+      <p class="chart-foot">Đường liền: giá trị trung bình theo giờ/ngày · dải mờ: biên độ thấp nhất – cao nhất trong khoảng. Kéo thanh bên dưới để phóng to một giai đoạn.</p>
+
+      <div class="hist-lower">
+        <div class="calendar-wrap">
+          <div class="chart-title" id="calTitle">Lịch nhiệt – trung bình ngày</div>
+          <div class="calendar" id="calendar"></div>
+          <div class="cal-legend" id="calLegend"></div>
+        </div>
+        <div class="table-wrap">
+          <div class="chart-title">Thống kê theo ngày</div>
+          <div class="table-scroll">
+            <table class="data-table" id="dailyTable">
+              <thead><tr><th>Ngày</th><th>pH TB</th><th>pH min–max</th><th>Mặn TB (‰)</th><th>Mặn min–max</th><th>Nhiệt độ TB</th></tr></thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ ALERTS + DEVICES ============ -->
+    <section class="lower">
+      <article class="card alerts">
+        <div class="card__head">
+          <div>
+            <div class="eyebrow">Nhật ký sự kiện</div>
+            <h2>Cảnh báo &amp; sự kiện</h2>
+          </div>
+          <span class="count-pill" id="alertCount">0</span>
+        </div>
+        <ul class="alert-list" id="alertList"></ul>
+      </article>
+
+      <article class="card devices">
+        <div class="card__head">
+          <div>
+            <div class="eyebrow">Thiết bị</div>
+            <h2>Thông số kỹ thuật cảm biến</h2>
+          </div>
+        </div>
+        <div class="device-grid" id="deviceGrid"></div>
+        <div class="pipeline" aria-label="Kiến trúc truyền dữ liệu">
+          <span class="pipe-node">Đầu dò pH</span>
+          <span class="pipe-node">Đầu dò độ mặn</span>
+          <span class="pipe-arrow">RS485 · Modbus RTU</span>
+          <span class="pipe-node pipe-node--hub">Gateway IoT</span>
+          <span class="pipe-arrow">4G / Wi-Fi · MQTT</span>
+          <span class="pipe-node">Máy chủ dữ liệu</span>
+          <span class="pipe-arrow">HTTPS</span>
+          <span class="pipe-node pipe-node--hub">Dashboard</span>
+        </div>
+      </article>
+    </section>
+  </main>
+
+  <!-- ============ FOOTER ============ -->
+  <footer class="footer">
+    <div class="footer__inner">
+      <div class="footer__brand">
+        <img class="only-dark" src="assets/img/arl-emblem-white.svg" alt="ARL" />
+        <img class="only-light" src="assets/img/arl-emblem.svg" alt="ARL" />
+        <div>
+          <strong>Applied Robotics Lab (ARL)</strong>
+          <p id="arlAbout">Phòng thí nghiệm Robot ứng dụng – Đại học Greenwich Việt Nam.</p>
+        </div>
+      </div>
+      <div class="footer__brand">
+        <img class="footer__remit" src="assets/img/remit-logo.png" alt="REMIT" onerror="this.classList.add('is-missing')" />
+        <div>
+          <strong>Industry Lab · Viện REMIT</strong>
+          <p id="remitAbout">Phòng thí nghiệm công nghiệp – Viện REMIT.</p>
+        </div>
+      </div>
+      <div class="footer__meta">
+        <span>© <span id="year"></span> ARL × REMIT Industry Lab</span>
+        <span>AquaSense v1.0 · Giám sát chất lượng nước</span>
+      </div>
+    </div>
+  </footer>
+
+  <div class="tooltip-layer" id="tip" role="tooltip"></div>
+
+  <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.1/dist/echarts.min.js"></script>
+  <script src="assets/js/config.js"></script>
+  <script src="assets/js/data.js"></script>
+  <script src="assets/js/twin.js"></script>
+  <script src="assets/js/controls.js"></script>
+  <script src="assets/js/app.js"></script>
+</body>
+</html>
