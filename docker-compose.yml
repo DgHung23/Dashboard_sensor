@@ -1,0 +1,19 @@
+services:
+  aquasense:
+    build: .
+    image: aquasense:2.0
+    container_name: aquasense
+    restart: unless-stopped
+    ports:
+      - "${AQ_PORT:-8080}:8080"
+    environment:
+      # PIN for the /control page (set it in .env). Empty → a random PIN is generated and printed in the logs.
+      CONTROL_PIN: ${CONTROL_PIN:-}
+      # set to true when running behind an HTTPS reverse proxy / tunnel (Caddy, Nginx, Cloudflare Tunnel…)
+      TRUST_PROXY: ${TRUST_PROXY:-false}
+      SESSION_DAYS: ${SESSION_DAYS:-30}
+    volumes:
+      - aquasense-data:/data
+
+volumes:
+  aquasense-data:

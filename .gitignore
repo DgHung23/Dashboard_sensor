@@ -1,0 +1,6 @@
+# local server data (state, generated PIN, session key)
+data/
+.env
+node_modules/
+.taste-skill/
+__*.html

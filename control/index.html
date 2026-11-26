@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="vi" data-theme="light">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>AquaSense · Điều khiển cảm biến</title>
+  <meta name="description" content="Bật / tắt cảm biến pH và độ mặn của trạm AquaSense từ điện thoại." />
+  <meta name="theme-color" content="#ffffff" />
+  <meta name="robots" content="noindex" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-title" content="AquaSense" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="icon" type="image/svg+xml" href="../assets/img/favicon.svg" />
+  <link rel="apple-touch-icon" href="apple-touch-icon.png" />
+  <link rel="preload" href="../assets/fonts/ibm-plex-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin />
+  <link rel="preload" href="../assets/fonts/ibm-plex-sans-latin-600-normal.woff2" as="font" type="font/woff2" crossorigin />
+  <link rel="stylesheet" href="../assets/css/style.css" />
+  <link rel="stylesheet" href="../assets/css/control.css" />
+  <script>
+    try { const t = localStorage.getItem('aq-theme'); if (t === 'dark' || t === 'light') document.documentElement.setAttribute('data-theme', t); } catch (e) {}
+  </script>
+</head>
+<body class="ctl">
+  <header class="ctl-top">
+    <div class="ctl-top__brand">
+      <img class="ctl-emblem only-light" src="../assets/img/arl-emblem-crop.svg" alt="ARL" />
+      <img class="ctl-emblem only-dark" src="../assets/img/arl-emblem-white-crop.svg" alt="ARL" />
+      <img class="ctl-seal" src="../assets/img/remit-logo.png" alt="REMIT" />
+      <div class="ctl-top__title">
+        <strong>Aqua<b>Sense</b></strong>
+        <span>Điều khiển cảm biến</span>
+      </div>
+    </div>
+    <span class="ctl-conn" id="conn" data-state="wait"><i></i><span>Đang kết nối</span></span>
+  </header>
+
+  <main class="ctl-main">
+    <!-- loading -->
+    <section class="ctl-view" id="viewLoading">
+      <p class="ctl-muted">Đang kết nối máy chủ…</p>
+    </section>
+
+    <!-- GitHub Pages / no server -->
+    <section class="ctl-view" id="viewStatic" hidden>
+      <div class="ctl-card ctl-note">
+        <h1>Cần máy chủ AquaSense</h1>
+        <p>Trang điều khiển hoạt động trên bản máy chủ (Docker). Bản đang mở là bản tĩnh dự phòng: ở đây cảm biến chỉ bật/tắt được bằng phím tắt trên chính trình duyệt đang xem dashboard.</p>
+        <a class="ctl-btn ctl-btn--ghost" href="../">Mở dashboard</a>
+      </div>
+    </section>
+
+    <!-- login -->
+    <section class="ctl-view" id="viewLogin" hidden>
+      <form class="ctl-card ctl-login" id="loginForm" autocomplete="off" novalidate>
+        <h1>Đăng nhập điều khiển</h1>
+        <p class="ctl-muted">Nhập mã PIN của trạm để bật / tắt cảm biến.</p>
+        <label class="ctl-field">
+          <span>Mã PIN</span>
+          <input id="pin" name="pin" type="password" inputmode="numeric" autocomplete="one-time-code" enterkeyhint="go" maxlength="32" required />
+        </label>
+        <p class="ctl-error" id="loginError" role="alert"></p>
+        <button class="ctl-btn ctl-btn--primary" id="loginBtn" type="submit">Đăng nhập</button>
+      </form>
+    </section>
+
+    <!-- panel -->
+    <section class="ctl-view" id="viewPanel" hidden>
+      <div class="ctl-station">
+        <div>
+          <span class="ctl-muted" id="stationName">Trạm quan trắc</span>
+          <h1 id="summary">Cảm biến</h1>
+        </div>
+        <button class="ctl-icon" id="themeBtn" type="button" aria-label="Đổi giao diện sáng/tối">
+          <svg class="i-moon" viewBox="0 0 24 24" width="18" height="18"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5Z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>
+          <svg class="i-sun" viewBox="0 0 24 24" width="18" height="18"><circle cx="12" cy="12" r="4.2" fill="none" stroke="currentColor" stroke-width="2"/><g stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 2v2.5M12 19.5V22M2 12h2.5M19.5 12H22M4.9 4.9l1.8 1.8M17.3 17.3l1.8 1.8M4.9 19.1l1.8-1.8M17.3 6.7l1.8-1.8"/></g></svg>
+        </button>
+      </div>
+
+      <div class="ctl-tiles" id="tiles"></div>
+
+      <button class="ctl-btn ctl-btn--ghost ctl-all" id="allOn" type="button" hidden>Bật lại tất cả cảm biến</button>
+
+      <div class="ctl-card ctl-log">
+        <div class="ctl-log__head"><h2>Nhật ký điều khiển</h2><span class="ctl-muted" id="logCount"></span></div>
+        <ul id="logList"></ul>
+      </div>
+
+      <div class="ctl-foot">
+        <a class="ctl-btn ctl-btn--ghost" href="../" target="_blank" rel="noopener">Mở dashboard</a>
+        <button class="ctl-btn ctl-btn--ghost" id="logoutBtn" type="button">Đăng xuất</button>
+      </div>
+    </section>
+  </main>
+
+  <div class="ctl-snack" id="snack" role="status" aria-live="polite" hidden>
+    <span id="snackText"></span>
+    <button type="button" id="snackUndo">Hoàn tác</button>
+  </div>
+
+  <script src="../assets/js/config.js"></script>
+  <script src="../assets/js/data.js"></script>
+  <script src="../assets/js/backend.js"></script>
+  <script src="../assets/js/control.js"></script>
+</body>
+</html>

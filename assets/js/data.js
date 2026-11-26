@@ -151,7 +151,21 @@
       const min = Date.now() - C.historyDays * DAY;
       SENSORS.forEach(k => { this.intervals[k] = this.intervals[k].filter(x => x[1] == null || x[1] > min || (x[2] ?? 0) > min); });
     },
-    save() { try { localStorage.setItem(LS_KEY, JSON.stringify(this.intervals)); } catch (e) {} },
+    remote: false,  // true when a backend owns the state (Docker version)
+    save() { if (this.remote) return; try { localStorage.setItem(LS_KEY, JSON.stringify(this.intervals)); } catch (e) {} },
+    // replace the whole state with the server's copy; returns the earliest time whose readings change
+    replace(next) {
+      const key = x => `${x[0]}|${x[1]}|${x[2]}`;
+      let from = Infinity;
+      SENSORS.forEach(k => {
+        const a = (next && Array.isArray(next[k]) ? next[k] : []).filter(x => Array.isArray(x) && typeof x[0] === 'number');
+        const oldKeys = new Set(this.intervals[k].map(key)), newKeys = new Set(a.map(key));
+        this.intervals[k].forEach(x => { if (!newKeys.has(key(x))) from = Math.min(from, x[0]); });
+        a.forEach(x => { if (!oldKeys.has(key(x))) from = Math.min(from, x[0]); });
+        this.intervals[k] = a.map(x => [x[0], x[1] ?? null, x[2] ?? null]);
+      });
+      return from;
+    },
     last(k) { const iv = this.intervals[k]; return iv[iv.length - 1]; },
     isOn(k) { const l = this.last(k); return !l || l[1] != null; },
     offSince(k) { return this.isOn(k) ? null : this.last(k)[0]; },
@@ -216,6 +230,12 @@
     },
     refreshLatest() {
       if (this.slots.length) this.slots[this.slots.length - 1] = measure(this.lastSlot);
+    },
+    // re-apply sensor availability to every stored slot at or after t
+    remaskFrom(t) {
+      if (!isFinite(t) || !this.slots.length) return;
+      const first = this.lastSlot - this.slots.length + 1;
+      for (let i = Math.max(0, Math.floor(t / STEP) - first); i < this.slots.length; i++) this.slots[i] = measure(first + i);
     },
     // most recent sample that has a reading for metric k
     lastValid(k) {

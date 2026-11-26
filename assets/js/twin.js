@@ -29,7 +29,7 @@
       defs.innerHTML = `
         <linearGradient id="tw-water" x1="0" y1="0" x2="0" y2="1">
           <stop id="tw-w1" offset="0" stop-color="#2bb5a0" stop-opacity=".85"/>
-          <stop id="tw-w2" offset="1" stop-color="#0a3e5c" stop-opacity=".95"/>
+          <stop id="tw-w2" offset="1" stop-color="#173a52" stop-opacity=".95"/>
         </linearGradient>
         <linearGradient id="tw-sky" x1="0" y1="0" x2="0" y2="1">
           <stop offset="0" stop-color="var(--sal-color)" stop-opacity=".10"/>
@@ -70,7 +70,7 @@
       el('rect', { x: TANK_L, y: 70, width: TANK_R - TANK_L, height: WATER_BOTTOM - 70, fill: 'url(#tw-glass)', rx: 6 }, tank);
 
       // Depth ruler
-      const ruler = el('g', { 'font-size': 10, fill: 'var(--text-3)', 'font-family': 'JetBrains Mono, Be Vietnam Pro, monospace' }, svg);
+      const ruler = el('g', { 'font-size': 10, fill: 'var(--text-3)', 'font-family': 'IBM Plex Sans, sans-serif' }, svg);
       for (let i = 0; i <= 4; i++) {
         const y = WATER_TOP + i * ((WATER_BOTTOM - WATER_TOP - 20) / 4);
         el('line', { x1: 20, x2: 30, y1: y, y2: y, stroke: 'var(--text-3)', 'stroke-width': 1 }, ruler);
@@ -92,7 +92,7 @@
       const gw = el('g', { transform: 'translate(640 120)' }, svg);
       el('rect', { x: 0, y: 0, width: 104, height: 88, rx: 12, fill: 'var(--surface-solid)', stroke: 'var(--border-strong)', 'stroke-width': 1.5 }, gw);
       el('rect', { x: 10, y: 12, width: 84, height: 30, rx: 6, fill: 'var(--bg)', stroke: 'var(--border)' }, gw);
-      this.gwText = el('text', { x: 52, y: 32, 'text-anchor': 'middle', 'font-size': 11, 'font-family': 'JetBrains Mono, Be Vietnam Pro, monospace', fill: 'var(--good)' }, gw);
+      this.gwText = el('text', { x: 52, y: 32, 'text-anchor': 'middle', 'font-size': 11, 'font-family': 'IBM Plex Sans, sans-serif', fill: 'var(--good)' }, gw);
       this.gwText.textContent = 'RS485 OK';
       this.gwLeds = [0, 1, 2].map(i => el('circle', { cx: 22 + i * 14, cy: 60, r: 4, fill: 'var(--good)', opacity: .4 }, gw));
       el('text', { x: 52, y: 80, 'text-anchor': 'middle', 'font-size': 10, fill: 'var(--text-2)', 'font-weight': 600 }, gw).textContent = 'GATEWAY';
@@ -110,7 +110,7 @@
       this.tagSal = this.tag(svg, 300, 108, 'var(--series-sal)');
 
       // ---- Thermometer label ----
-      this.tempText = el('text', { x: TANK_R - 6, y: 62, 'text-anchor': 'end', 'font-size': 12, 'font-family': 'JetBrains Mono, Be Vietnam Pro, monospace', fill: 'var(--text-2)' }, svg);
+      this.tempText = el('text', { x: TANK_R - 6, y: 62, 'text-anchor': 'end', 'font-size': 12, 'font-family': 'IBM Plex Sans, sans-serif', fill: 'var(--text-2)' }, svg);
 
       // Packets
       this.packetG = el('g', {}, svg);
@@ -141,7 +141,7 @@
     tag(svg, x, y, color) {
       const g = el('g', { transform: `translate(${x} ${y})` }, svg);
       el('rect', { x: 0, y: 0, width: 78, height: 30, rx: 8, fill: 'var(--surface-solid)', stroke: color, 'stroke-width': 1.2, opacity: .95 }, g);
-      const t = el('text', { x: 39, y: 20, 'text-anchor': 'middle', 'font-size': 13, 'font-weight': 700, 'font-family': 'JetBrains Mono, Be Vietnam Pro, monospace', fill: 'var(--text)' }, g);
+      const t = el('text', { x: 39, y: 20, 'text-anchor': 'middle', 'font-size': 13, 'font-weight': 700, 'font-family': 'IBM Plex Sans, sans-serif', fill: 'var(--text)' }, g);
       return t;
     },
 
@@ -152,7 +152,7 @@
       const on = st.online || { ph: true, sal: true };
       this.tagPh.textContent = on.ph && st.ph != null ? `${st.ph.toFixed(2)} pH` : 'OFFLINE';
       this.tagSal.textContent = on.sal && st.sal != null ? `${st.sal.toFixed(1)} ‰` : 'OFFLINE';
-      this.tempText.textContent = st.temp != null ? `🌡 ${st.temp.toFixed(1)} °C` : '🌡 -- °C';
+      this.tempText.textContent = st.temp != null ? `Nhiệt độ ${st.temp.toFixed(1)} °C` : 'Nhiệt độ -- °C';
       // offline probes fade out, their cable goes dark
       this.probePh.g.style.transition = this.probeSal.g.style.transition = 'opacity .8s';
       this.probePh.g.style.opacity = on.ph ? 1 : .3;

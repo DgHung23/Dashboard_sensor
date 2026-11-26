@@ -1,0 +1,12 @@
+.git
+.gitignore
+.github
+.taste-skill
+data
+node_modules
+*.md
+.env
+.env.*
+logo_ARL*
+Dockerfile
+docker-compose.yml

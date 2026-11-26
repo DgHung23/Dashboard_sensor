@@ -1,36 +1,28 @@
 <!doctype html>
-<html lang="vi" data-theme="dark">
+<html lang="vi" data-theme="light">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>AquaSense · Giám sát chất lượng nước</title>
   <meta name="description" content="Hệ thống giám sát pH và độ mặn của nước theo thời gian thực – Applied Robotics Lab (Greenwich Việt Nam) × REMIT Industry Lab." />
-  <meta name="theme-color" content="#061423" />
+  <meta name="theme-color" content="#ffffff" />
   <link rel="icon" type="image/svg+xml" href="assets/img/favicon.svg" />
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet" />
+  <link rel="preload" href="assets/fonts/ibm-plex-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin />
+  <link rel="preload" href="assets/fonts/ibm-plex-sans-latin-600-normal.woff2" as="font" type="font/woff2" crossorigin />
   <link rel="stylesheet" href="assets/css/style.css" />
   <script>
-    // Apply saved theme before paint
-    try { const t = localStorage.getItem('aq-theme'); if (t) document.documentElement.setAttribute('data-theme', t); } catch (e) {}
+    // Apply saved theme before paint (light by default)
+    try { const t = localStorage.getItem('aq-theme'); if (t === 'dark' || t === 'light') document.documentElement.setAttribute('data-theme', t); } catch (e) {}
   </script>
 </head>
 <body>
-  <!-- Data-driven ambient background -->
-  <div class="ambient" aria-hidden="true">
-    <div class="ambient__blob ambient__blob--a"></div>
-    <div class="ambient__blob ambient__blob--b"></div>
-    <div class="ambient__grid"></div>
-  </div>
-
   <!-- ============ HEADER ============ -->
   <header class="topbar">
     <div class="topbar__inner">
       <div class="brands">
         <a class="brand brand--arl" href="https://www.facebook.com/GW.ARLab" target="_blank" rel="noopener" title="Applied Robotics Lab – Greenwich Việt Nam">
-          <img class="brand__emblem only-dark" src="assets/img/arl-emblem-white.svg" alt="ARL" />
-          <img class="brand__emblem only-light" src="assets/img/arl-emblem.svg" alt="ARL" />
+          <img class="brand__emblem only-dark" src="assets/img/arl-emblem-white-crop.svg" alt="ARL" />
+          <img class="brand__emblem only-light" src="assets/img/arl-emblem-crop.svg" alt="ARL" />
           <span class="brand__text">
             <strong>Applied Robotics Lab</strong>
             <small>University of Greenwich Việt Nam</small>
@@ -291,8 +283,8 @@
   <footer class="footer">
     <div class="footer__inner">
       <div class="footer__brand">
-        <img class="only-dark" src="assets/img/arl-emblem-white.svg" alt="ARL" />
-        <img class="only-light" src="assets/img/arl-emblem.svg" alt="ARL" />
+        <img class="only-dark" src="assets/img/arl-emblem-white-crop.svg" alt="ARL" />
+        <img class="only-light" src="assets/img/arl-emblem-crop.svg" alt="ARL" />
         <div>
           <strong>Applied Robotics Lab (ARL)</strong>
           <p id="arlAbout">Phòng thí nghiệm Robot ứng dụng – Đại học Greenwich Việt Nam.</p>
@@ -314,9 +306,10 @@
 
   <div class="tooltip-layer" id="tip" role="tooltip"></div>
 
-  <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.1/dist/echarts.min.js"></script>
+  <script src="assets/vendor/echarts.min.js"></script>
   <script src="assets/js/config.js"></script>
   <script src="assets/js/data.js"></script>
+  <script src="assets/js/backend.js"></script>
   <script src="assets/js/twin.js"></script>
   <script src="assets/js/controls.js"></script>
   <script src="assets/js/app.js"></script>

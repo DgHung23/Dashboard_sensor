@@ -78,16 +78,36 @@
   function save() { try { localStorage.setItem(LS_KEY, JSON.stringify(binds)); } catch (e) {} }
 
   // ---------- actions ----------
-  function toggleSensor(k) {
-    const on = Sensors.toggle(k);
+  function announce(k, on) {
     const sc = C.sensors[k];
     const name = k === 'ph' ? 'pH' : 'độ mặn';
     toast(on ? 'info' : 'critical',
       on ? `Cảm biến ${name} đã kết nối lại` : `Mất kết nối cảm biến ${name}`,
       `${sc.model} · Modbus ID ${String(sc.address).padStart(2, '0')}`);
+  }
+  async function toggleSensor(k) {
+    const B = window.AQBackend;
+    if (B && B.mode === 'server') {
+      // server version: the change goes through the backend (this browser must be signed in on /control)
+      try { await B.setSensor(k, !Sensors.isOn(k)); }
+      catch (e) {
+        if (e.status === 401) toast('warn', 'Chưa đăng nhập điều khiển', 'Đăng nhập tại /control trên trình duyệt này');
+        else toast('warn', 'Không gửi được lệnh', e.message || 'Lỗi kết nối máy chủ');
+      }
+      return; // the state broadcast announces the change and re-renders
+    }
+    const on = Sensors.toggle(k);
+    announce(k, on);
     window.dispatchEvent(new CustomEvent('aq:sensors', { detail: { sensor: k, on } }));
     if (dialog && !dialog.hidden) renderList();
   }
+  // changes made elsewhere (phone control page, another screen) arrive here
+  if (window.AQBackend) window.AQBackend.on(ev => {
+    if (ev.type !== 'state' || ev.initial) return;
+    ev.changes.forEach(c => { announce(c.sensor, c.on); window.dispatchEvent(new CustomEvent('aq:sensors', { detail: c })); });
+    if (!ev.changes.length) window.dispatchEvent(new CustomEvent('aq:sensors', { detail: {} }));
+    if (dialog && !dialog.hidden) renderList();
+  });
   function run(id) {
     const a = ACTIONS.find(x => x.id === id);
     if (!a) return;
@@ -124,6 +144,7 @@
           <button class="icon-btn" data-kb-close aria-label="Đóng">✕</button>
         </div>
         <p class="kb-hint">Chọn <b>Đổi phím</b> rồi nhấn tổ hợp mới. <kbd>Esc</kbd> để huỷ, <kbd>Backspace</kbd> để bỏ gán. Phím được lưu trên trình duyệt này.</p>
+        <p class="kb-hint kb-server" hidden></p>
         <ul class="kb-list"></ul>
         <div class="kb-msg" role="status" aria-live="polite"></div>
         <div class="kb-foot">
@@ -142,6 +163,13 @@
     });
   }
   function renderList() {
+    const B = window.AQBackend, sv = dialog.querySelector('.kb-server');
+    if (B && B.mode === 'server') {
+      sv.hidden = false;
+      sv.innerHTML = B.authed
+        ? 'Bản máy chủ: phím bật/tắt gửi lệnh tới máy chủ, mọi màn hình cập nhật ngay. Trình duyệt này <b>đã đăng nhập</b> điều khiển.'
+        : 'Bản máy chủ: cần <a href="control/">đăng nhập trang điều khiển</a> trên trình duyệt này thì phím bật/tắt mới có tác dụng.';
+    } else sv.hidden = true;
     listEl.innerHTML = ACTIONS.map(a => {
       const st = a.sensor ? (Sensors.isOn(a.sensor) ? '<span class="kb-state on">Đang hoạt động</span>' : '<span class="kb-state off">Đang tắt</span>') : '<span class="kb-state">Phím ẩn</span>';
       const listening = capturing === a.id;

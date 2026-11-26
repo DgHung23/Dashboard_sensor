@@ -81,8 +81,9 @@
     return stops[stops.length - 1][1];
   }
   // pH indicator-like scale (acid → neutral → alkaline)
-  const PH_STOPS = [[0, '#d7263d'], [3, '#f46036'], [5, '#f2b33d'], [6.3, '#a8c545'], [7, '#3cb371'], [7.8, '#22b3a3'], [8.6, '#1f95cf'], [10, '#3e63d0'], [12, '#5a46bd'], [14, '#7a3fb0']];
-  const SAL_STOPS = [[0, '#86d8ea'], [8, '#3fb6dd'], [18, '#1f8fd0'], [30, '#2160b8'], [40, '#2b3f99']];
+  // muted, print-like indicator colours (no neon)
+  const PH_STOPS = [[0, '#b8342b'], [3, '#c8612a'], [5, '#c49a2c'], [6.3, '#8ea23f'], [7, '#4a9460'], [7.8, '#1f8f86'], [8.6, '#2b6fae'], [10, '#34539c'], [12, '#3b4387'], [14, '#3a3573']];
+  const SAL_STOPS = [[0, '#9cc7d1'], [8, '#55a3b6'], [18, '#1f7fa6'], [30, '#1d5a8f'], [40, '#1b3f6e']];
   const phColor = v => ramp(PH_STOPS, v);
   const salColor = v => ramp(SAL_STOPS, v);
 
@@ -162,13 +163,13 @@
     ticks.forEach(v => {
       const a = ang(v), [x0, y0] = pt(a, r - 12), [x1, y1] = pt(a, r - 17), [tx, ty] = pt(a, r - 29);
       svgEl('line', { x1: x0, y1: y0, x2: x1, y2: y1, stroke: 'var(--text-3)', 'stroke-width': 1.4 }, svg);
-      const t = svgEl('text', { x: tx, y: ty + 3.5, 'text-anchor': 'middle', 'font-size': 10, fill: 'var(--text-3)', 'font-family': 'JetBrains Mono, Be Vietnam Pro, monospace' }, svg);
+      const t = svgEl('text', { x: tx, y: ty + 3.5, 'text-anchor': 'middle', 'font-size': 10, fill: 'var(--text-3)', 'font-family': 'IBM Plex Mono, monospace' }, svg);
       t.textContent = v;
     });
     // optimal label
     const [lx, ly] = pt(ang((th.optimal[0] + th.optimal[1]) / 2), r + 24);
-    const ol = svgEl('text', { x: lx, y: ly + 3, 'text-anchor': 'middle', 'font-size': 8.5, 'font-weight': 700, fill: 'var(--good)', 'letter-spacing': '.06em' }, svg);
-    ol.textContent = 'TỐI ƯU';
+    const ol = svgEl('text', { x: lx, y: ly + 3, 'text-anchor': 'middle', 'font-size': 9, 'font-weight': 600, fill: 'var(--good)' }, svg);
+    ol.textContent = 'Tối ưu';
 
     // needle
     const needle = svgEl('g', {}, svg);
@@ -177,7 +178,7 @@
     const hub = svgEl('circle', { cx, cy, r: 4, fill: colorFn(min) }, svg);
     const cap = svgEl('text', { x: cx, y: cy + 56, 'text-anchor': 'middle', 'font-size': 11, fill: 'var(--text-2)', 'font-weight': 600 }, svg);
     cap.textContent = label;
-    const minmax = svgEl('text', { x: cx, y: cy + 72, 'text-anchor': 'middle', 'font-size': 9.5, fill: 'var(--text-3)', 'font-family': 'JetBrains Mono, Be Vietnam Pro, monospace' }, svg);
+    const minmax = svgEl('text', { x: cx, y: cy + 72, 'text-anchor': 'middle', 'font-size': 9.5, fill: 'var(--text-3)', 'font-family': 'IBM Plex Mono, monospace' }, svg);
 
     let cur = min;
     const owner = {};
@@ -226,18 +227,18 @@
     return {
       trigger: 'axis', confine: true,
       backgroundColor: T.surface, borderColor: T.border, borderWidth: 1, padding: [8, 12],
-      textStyle: { color: T.text, fontFamily: 'Be Vietnam Pro', fontSize: 12 },
+      textStyle: { color: T.text, fontFamily: 'IBM Plex Sans', fontSize: 12 },
       axisPointer: { type: 'line', lineStyle: { color: T.text3, type: 'dashed' } },
-      extraCssText: 'border-radius:10px;box-shadow:0 10px 30px -12px rgba(0,0,0,.45);'
+      extraCssText: 'border-radius:8px;box-shadow:0 12px 32px -12px rgba(21,32,43,.3);'
     };
   }
   const timeLabel = { year: '{yyyy}', month: 'T{M}/{yyyy}', day: '{dd}/{MM}', hour: '{HH}:{mm}', minute: '{HH}:{mm}' };
   function axes(T, yMin, yMax, dec) {
     return {
       xAxis: { type: 'time', axisLine: { lineStyle: { color: T.border } }, axisTick: { show: false },
-        axisLabel: { color: T.text3, hideOverlap: true, formatter: timeLabel, fontSize: 11 }, splitLine: { show: false } },
+        axisLabel: { color: T.text3, hideOverlap: true, formatter: timeLabel, fontSize: 11, fontFamily: 'IBM Plex Sans' }, splitLine: { show: false } },
       yAxis: { type: 'value', min: yMin, max: yMax, splitNumber: 4,
-        axisLabel: { color: T.text3, fontSize: 11, formatter: v => v.toFixed(dec) },
+        axisLabel: { color: T.text3, fontSize: 11, fontFamily: 'IBM Plex Sans', formatter: v => v.toFixed(dec) },
         splitLine: { lineStyle: { color: T.grid } } }
     };
   }
@@ -271,7 +272,7 @@
     }));
   }
   function gradientArea(color) {
-    return new echarts.graphic.LinearGradient(0, 0, 0, 1, [{ offset: 0, color: alpha(color, .28) }, { offset: 1, color: alpha(color, 0) }]);
+    return new echarts.graphic.LinearGradient(0, 0, 0, 1, [{ offset: 0, color: alpha(color, .16) }, { offset: 1, color: alpha(color, 0) }]);
   }
 
   let rtHours = 24;
@@ -296,7 +297,7 @@
           if (s[m] == null) return head + '<div style="margin-top:4px;opacity:.8">Không có dữ liệu · cảm biến ngoại tuyến</div>';
           const lv = classify(m, s[m]);
           return `${head}
-            <div style="margin-top:4px"><b style="font-family:JetBrains Mono;font-size:15px">${s[m].toFixed(METRIC[m].dec)}</b> ${METRIC[m].unit}
+            <div style="margin-top:4px"><b style="font-variant-numeric:tabular-nums;font-size:15px">${s[m].toFixed(METRIC[m].dec)}</b> ${METRIC[m].unit}
             <span style="margin-left:8px;color:${T[lv === 'good' ? 'good' : lv]};font-weight:700">${LEVEL[lv].icon} ${LEVEL[lv].label}</span></div>
             ${s.rain ? '<div style="font-size:11px;opacity:.7;margin-top:2px">Đang có mưa</div>' : ''}`;
         } },
@@ -393,7 +394,7 @@
         if (a[m].avg == null) return `<div style="font-size:11px;opacity:.7">${fmtB(a.t)}</div><div style="margin-top:4px;opacity:.8">Không có dữ liệu · cảm biến ngoại tuyến</div>`;
         const lv = classify(m, a[m].avg);
         return `<div style="font-size:11px;opacity:.7">${fmtB(a.t)}</div>
-          <div style="margin-top:4px">TB <b style="font-family:JetBrains Mono;font-size:15px">${a[m].avg.toFixed(meta.dec)}</b> ${meta.unit}
+          <div style="margin-top:4px">TB <b style="font-variant-numeric:tabular-nums;font-size:15px">${a[m].avg.toFixed(meta.dec)}</b> ${meta.unit}
           <span style="margin-left:6px;color:${T[lv === 'good' ? 'good' : lv]};font-weight:700">${LEVEL[lv].icon} ${LEVEL[lv].label}</span></div>
           <div style="font-size:11px;opacity:.75">Thấp nhất ${a[m].min.toFixed(meta.dec)} · Cao nhất ${a[m].max.toFixed(meta.dec)}</div>`;
       } },
@@ -423,7 +424,7 @@
   function renderCalendar(T) {
     const m = histMetric;
     const dark = root.getAttribute('data-theme') !== 'light';
-    const RAMP = dark ? ['#16324f', '#1d4f86', '#2370cd', '#519ced', '#9dc8f7'] : ['#e3eefb', '#b6d5f8', '#6aabf1', '#2370cd', '#0f4a96'];
+    const RAMP = dark ? ['#1d2a38', '#23405f', '#2f5f93', '#5b8fdc', '#a9c6ee'] : ['#e4e9f0', '#bccde3', '#7fa0cc', '#3f6fae', '#185292'];
     const days = new Map();
     Store.slots.forEach(s => {
       const k = localDayIndex(s.t);
@@ -586,7 +587,7 @@
   // =========================================================
   const gauges = {};
   let firstPaint = true;
-  const OFF_COLOR = '#6f8494';
+  const OFF_COLOR = '#8b949c';
   const CARD = {
     ph:  { val: 'valPh',  delta: 'deltaPh',  dec: 2, unit: '',   blank: '-.--' },
     sal: { val: 'valSal', delta: 'deltaSal', dec: 2, unit: ' ‰', blank: '--.--' }
@@ -642,7 +643,7 @@
     let overall = quality || 'offline';
     if (offCount && overall === 'good') overall = 'warn';
     root.style.setProperty('--status-color', css(LEVEL[overall].color));
-    document.querySelector('meta[name="theme-color"]').setAttribute('content', root.getAttribute('data-theme') === 'light' ? '#eaf1f6' : '#061423');
+    document.querySelector('meta[name="theme-color"]').setAttribute('content', root.getAttribute('data-theme') === 'dark' ? '#16202a' : '#ffffff');
 
     // pH card
     renderCard('ph', on.ph, cur.ph, prevH.ph, P);
@@ -678,7 +679,7 @@
     const pill = $('livePill');
     pill.classList.toggle('is-partial', offCount === 1);
     pill.classList.toggle('is-down', offCount === 2);
-    pill.querySelector('span:last-child').textContent = offCount === 0 ? 'TRỰC TUYẾN' : offCount === 1 ? '1/2 CẢM BIẾN' : 'NGOẠI TUYẾN';
+    pill.querySelector('span:last-child').textContent = offCount === 0 ? 'Trực tuyến' : offCount === 1 ? '1/2 cảm biến' : 'Ngoại tuyến';
 
     // twin
     Twin.update({ ph: cur.ph, sal: cur.sal, temp: cur.temp, phColor: cur.ph != null ? pc : '#5f7783', salColor: sc, online: on });
@@ -820,5 +821,7 @@
     tick(); setInterval(tick, 1000);
   }
 
-  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init); else init();
+  // server version: load the sensor on/off state first so history gaps are right from the first paint
+  const boot = () => (window.AQBackend ? window.AQBackend.ready : Promise.resolve()).then(init, init);
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot); else boot();
 })();
