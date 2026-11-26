@@ -471,7 +471,7 @@
     };
     const rng = (a, d) => a.min == null ? '<td style="color:var(--text-3)">—</td>' : `<td>${a.min.toFixed(d)} – ${a.max.toFixed(d)}</td>`;
     $('dailyTable').querySelector('tbody').innerHTML = rows.map(r => `<tr>
-      <td>${WEEKDAYS[L(r.t + 12 * 3600000).getUTCDay()]}, ${fmtDMY(r.t + 12 * 3600000)}</td>
+      <td title="${WEEKDAYS[L(r.t + 12 * 3600000).getUTCDay()]}, ${fmtDMY(r.t + 12 * 3600000)}">${['CN','T2','T3','T4','T5','T6','T7'][L(r.t + 12 * 3600000).getUTCDay()]} · ${fmtDM(r.t + 12 * 3600000)}</td>
       ${cell('ph', r.ph.avg, 2)}${rng(r.ph, 2)}
       ${cell('sal', r.sal.avg, 2)}${rng(r.sal, 1)}
       ${cell('temp', r.temp.avg, 1)}</tr>`).join('');
