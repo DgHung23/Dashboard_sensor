@@ -113,6 +113,40 @@
     return S.ph.mean + diurnal + drift - rain + buffer;
   }
 
+  // ---------- pond dyke soil (7-in-1 probe, ~20 cm deep) ----------
+  const SO = S.soil;
+  function seasonalSal(t) {
+    return S.sal.mean + S.sal.seasonalAmp * Math.cos(2 * Math.PI * (dayOfYear(t) - S.sal.peakDoy) / 365);
+  }
+  function soil(t, slot) {
+    const doy = dayOfYear(t), h = localHour(t);
+    const wet = rainImpact(t, SO.wetRecoveryH);                 // infiltration after showers
+    // volumetric water content: wet season higher, showers wet the soil, midday sun dries the topsoil
+    const moist = SO.moistMean + SO.moistSeasonalAmp * Math.cos(2 * Math.PI * (doy - SO.moistPeakDoy) / 365)
+      + SO.rainWetting * wet
+      - 1.1 * Math.max(0, Math.sin(Math.PI * (h - 10) / 12))
+      + 2.2 * vnoise(t / (3 * DAY), 41) + .12 * gauss(slot, 42);
+    // soil at 20 cm follows the air with a damped, ~2.5 h delayed daily wave
+    const soilT = temperature(t - 2.5 * 3600000) * .72 + 29.5 * .28 + .05 * gauss(slot, 43);
+    // acid-sulphate dyke: rain flushes acidity (oxidised pyrite) → pH dips, then recovers
+    const soilPh = SO.phMean + .18 * vnoise(t / (6 * DAY), 44) + .05 * vnoise(t / DAY, 45)
+      - SO.phRainDrop * rainImpact(t, SO.phRecoveryH) + .01 * gauss(slot, 46);
+    // bulk EC follows saline intrusion (seasonal salinity) and wetness; showers leach salts
+    const soilEc = SO.ecBase + SO.ecPerSal * seasonalSal(t) + 9 * (moist - SO.moistMean)
+      - SO.ecRainDrop * rainImpact(t, 72) + 60 * vnoise(t / (2 * DAY), 47) + 12 * gauss(slot, 48);
+    // nutrients (estimated by the probe from EC); rain leaches nitrogen slowly
+    const N = SO.n + 9 * vnoise(t / (9 * DAY), 51) + .004 * (soilEc - 2000) - 5 * rainImpact(t, 120) + .6 * gauss(slot, 52);
+    const P = SO.p + 4 * vnoise(t / (11 * DAY), 53) + .0015 * (soilEc - 2000) + .4 * gauss(slot, 54);
+    const K = SO.k + 16 * vnoise(t / (8 * DAY), 55) + .012 * (soilEc - 2000) - 4 * rainImpact(t, 96) + 1 * gauss(slot, 56);
+    return {
+      moist: Math.round(Math.max(5, Math.min(60, moist)) * 10) / 10,
+      soilT: Math.round(soilT * 10) / 10,
+      soilPh: Math.round(Math.max(3, Math.min(9, soilPh)) * 100) / 100,
+      soilEc: Math.max(0, Math.round(soilEc / 10) * 10),   // 10 µS/cm resolution
+      N: Math.max(0, Math.round(N)), P: Math.max(0, Math.round(P)), K: Math.max(0, Math.round(K))
+    };
+  }
+
   // one 5-minute sample (with small measurement noise, rounded to sensor resolution)
   function sample(slot) {
     const t = slot * STEP;
@@ -121,14 +155,14 @@
     const sal = salTrue + S.sal.noise * gauss(slot, 4);
     const p = ph(t, salTrue) + S.ph.noise * gauss(slot, 5);
     const salR = Math.max(0, Math.round(sal * 100) / 100);
-    return {
+    return Object.assign({
       t,
       ph: Math.round(p * 100) / 100,
       sal: salR,
       temp: Math.round(temp * 10) / 10,
       ec: Math.round(salToEC(salR) * 100) / 100,
       rain: isRaining(t)
-    };
+    }, soil(t, slot));
   }
 
   // Salinity (‰) → EC (mS/cm @25 °C), empirical: S ≈ 0.4665·EC^1.0878  ⇒  EC ≈ (S/0.4665)^0.919
@@ -139,10 +173,13 @@
   // ---------- sensor availability (operator on/off, persisted in this browser) ----------
   // Each sensor keeps a list of offline intervals [offAt, dataResumesAt, reconnectedAt].
   // Slots with offAt <= t < dataResumesAt have no reading for that sensor (gaps in history).
-  const SENSORS = ['ph', 'sal'];
+  const SENSORS = ['ph', 'sal', 'soil'];
+  // readings each probe delivers (water temperature comes from either water probe)
+  const SENSOR_METRICS = { ph: ['ph'], sal: ['sal', 'ec'], soil: ['moist', 'soilT', 'soilPh', 'soilEc', 'N', 'P', 'K'] };
+  const METRICS = ['ph', 'sal', 'temp', 'moist', 'soilT', 'soilPh', 'soilEc', 'N', 'P', 'K'];
   const LS_KEY = 'aq-sensor-intervals';
   const Sensors = {
-    intervals: { ph: [], sal: [] },
+    intervals: { ph: [], sal: [], soil: [] },
     load() {
       try {
         const v = JSON.parse(localStorage.getItem(LS_KEY) || 'null');
@@ -195,10 +232,13 @@
   // a sample as received by the gateway: readings of offline sensors are missing (null)
   function measure(slot) {
     const s = sample(slot);
-    const offPh = Sensors.offAt('ph', s.t), offSal = Sensors.offAt('sal', s.t);
-    if (offPh) s.ph = null;
-    if (offSal) { s.sal = null; s.ec = null; }
-    if (offPh && offSal) s.temp = null;   // water temperature comes from either probe
+    let waterOff = 0;
+    SENSORS.forEach(k => {
+      if (!Sensors.offAt(k, s.t)) return;
+      SENSOR_METRICS[k].forEach(m => { s[m] = null; });
+      if (k !== 'soil') waterOff++;
+    });
+    if (waterOff === 2) s.temp = null;   // water temperature comes from either water probe
     return s;
   }
 
@@ -264,10 +304,11 @@
         const b = Math.floor((s.t + TZ) / bucketMs) * bucketMs - TZ;
         if (!cur || cur.t !== b) {
           if (cur) out.push(finish(cur));
-          cur = { t: b, n: 0, ph: [0, Infinity, -Infinity, 0], sal: [0, Infinity, -Infinity, 0], temp: [0, Infinity, -Infinity, 0] };
+          cur = { t: b, n: 0 };
+          for (const k of METRICS) cur[k] = [0, Infinity, -Infinity, 0];
         }
         cur.n++;
-        for (const k of ['ph', 'sal', 'temp']) {
+        for (const k of METRICS) {
           const v = s[k], a = cur[k];
           if (v == null) continue;           // sensor offline → no reading
           a[0] += v; a[3]++; if (v < a[1]) a[1] = v; if (v > a[2]) a[2] = v;
@@ -277,7 +318,7 @@
       return out;
       function finish(c) {
         const r = { t: c.t, n: c.n };
-        for (const k of ['ph', 'sal', 'temp']) {
+        for (const k of METRICS) {
           const a = c[k];
           r[k] = a[3] ? { avg: a[0] / a[3], min: a[1], max: a[2], n: a[3] } : { avg: null, min: null, max: null, n: 0 };
         }
@@ -286,5 +327,5 @@
     }
   };
 
-  window.AQData = { Store, Sensors, STEP, DAY, TZ, localHour, localDayIndex, rainOfDay, salToEC };
+  window.AQData = { Store, Sensors, SENSORS, SENSOR_METRICS, METRICS, STEP, DAY, TZ, localHour, localDayIndex, rainOfDay, salToEC };
 })();

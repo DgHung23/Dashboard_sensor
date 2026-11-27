@@ -1,7 +1,7 @@
 services:
   aquasense:
     build: .
-    image: aquasense:2.0
+    image: aquasense:2.1
     container_name: aquasense
     restart: unless-stopped
     ports:

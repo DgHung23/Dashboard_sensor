@@ -4,7 +4,7 @@
    ========================================================= */
 (function () {
   const C = window.AQ_CONFIG;
-  const { Store, Sensors, STEP, TZ } = window.AQData;
+  const { Store, Sensors, SENSORS, STEP, TZ } = window.AQData;
   const B = window.AQBackend;
   const $ = id => document.getElementById(id);
   const pad2 = n => String(n).padStart(2, '0');
@@ -23,7 +23,9 @@
     ph:  { name: 'Cảm biến pH',      short: 'pH',     unit: 'pH', dec: 2, key: 'ph',
            icon: '<path d="M9 2h6M10 2v6.5L5.2 17a3 3 0 0 0 2.6 4.5h8.4a3 3 0 0 0 2.6-4.5L14 8.5V2" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M7.2 15h9.6" stroke="currentColor" stroke-width="1.8"/>' },
     sal: { name: 'Cảm biến độ mặn',  short: 'độ mặn', unit: '‰',  dec: 2, key: 'sal',
-           icon: '<path d="M12 2.5S5.5 10 5.5 14.5a6.5 6.5 0 0 0 13 0C18.5 10 12 2.5 12 2.5Z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><g fill="currentColor"><rect x="9" y="13" width="2.2" height="2.2" rx=".4"/><rect x="12.6" y="15.6" width="2.2" height="2.2" rx=".4"/><rect x="12.2" y="11.4" width="1.8" height="1.8" rx=".4"/></g>' }
+           icon: '<path d="M12 2.5S5.5 10 5.5 14.5a6.5 6.5 0 0 0 13 0C18.5 10 12 2.5 12 2.5Z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><g fill="currentColor"><rect x="9" y="13" width="2.2" height="2.2" rx=".4"/><rect x="12.6" y="15.6" width="2.2" height="2.2" rx=".4"/><rect x="12.2" y="11.4" width="1.8" height="1.8" rx=".4"/></g>' },
+    soil: { name: 'Cảm biến đất 7 trong 1', short: 'đất', unit: '% ẩm', dec: 1, key: 'moist',
+           icon: '<path d="M3 10.5h18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M12 10.5V6m0 0c0-2 1.6-3.4 3.6-3.4C15.6 4.6 14 6 12 6Zm0 0C12 4.3 10.6 3 8.8 3 8.8 4.7 10.2 6 12 6Z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M8.5 10.5v8.2M12 10.5v9.8M15.5 10.5v8.2" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>' }
   };
   const pending = new Set();
 
@@ -39,7 +41,7 @@
 
   // ---------- tiles ----------
   function buildTiles() {
-    $('tiles').innerHTML = ['ph', 'sal'].map(k => {
+    $('tiles').innerHTML = SENSORS.map(k => {
       const s = SENSOR[k], cfg = C.sensors[k];
       return `<article class="ctl-card tile" id="tile-${k}" data-sensor="${k}">
         <div class="tile__head">
@@ -67,7 +69,7 @@
     Store.poll();
     const s = Store.latest();
     let offCount = 0;
-    ['ph', 'sal'].forEach(k => {
+    SENSORS.forEach(k => {
       const tile = $('tile-' + k), on = Sensors.isOn(k), sw = tile.querySelector('[data-role="switch"]');
       if (!on) offCount++;
       tile.classList.toggle('is-off', !on);
@@ -80,10 +82,11 @@
       tile.querySelector('[data-role="value"]').textContent = on && v != null ? v.toFixed(SENSOR[k].dec) : '—';
       const since = Sensors.offSince(k);
       tile.querySelector('[data-role="meta"]').textContent = on
-        ? (s ? `Lần đo ${fmtHM(s.t)} · chu kỳ ${C.sampleMinutes} phút` : '')
+        ? (s ? (k === 'soil' && s.soilPh != null ? `pH đất ${s.soilPh.toFixed(2)} · EC ${String(s.soilEc).replace(/\B(?=(\d{3})+(?!\d))/g, ' ')} µS/cm · ${fmtHM(s.t)}` : `Lần đo ${fmtHM(s.t)} · chu kỳ ${C.sampleMinutes} phút`) : '')
         : `Ngắt lúc ${fmtHM(since)} · ${fmtDM(since)} — ${fmtDur(Date.now() - since)}`;
     });
-    $('summary').textContent = offCount === 0 ? 'Cả 2 cảm biến đang hoạt động' : offCount === 2 ? 'Cả 2 cảm biến đã tắt' : '1 cảm biến đang tắt';
+    const total = SENSORS.length;
+    $('summary').textContent = offCount === 0 ? `Cả ${total} cảm biến đang hoạt động` : offCount === total ? `Cả ${total} cảm biến đã tắt` : `${offCount} cảm biến đang tắt`;
     $('allOn').hidden = offCount === 0;
     renderLog();
   }
@@ -166,7 +169,7 @@
     try { await B.logout(); } catch (e) {}
     show('viewLogin');
   });
-  $('allOn').addEventListener('click', () => ['ph', 'sal'].forEach(k => { if (!Sensors.isOn(k)) setSensor(k, true, { undo: false }); }));
+  $('allOn').addEventListener('click', () => SENSORS.forEach(k => { if (!Sensors.isOn(k)) setSensor(k, true, { undo: false }); }));
   $('themeBtn').addEventListener('click', () => {
     const root = document.documentElement;
     const next = root.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';

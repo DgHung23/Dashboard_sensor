@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>AquaSense · Giám sát chất lượng nước</title>
-  <meta name="description" content="Hệ thống giám sát pH và độ mặn của nước theo thời gian thực – Applied Robotics Lab (Greenwich Việt Nam) × REMIT Industry Lab." />
+  <meta name="description" content="Hệ thống giám sát pH, độ mặn của nước và đất bờ ao theo thời gian thực – Applied Robotics Lab (Greenwich Việt Nam) × REMIT Industry Lab." />
   <meta name="theme-color" content="#ffffff" />
   <link rel="icon" type="image/svg+xml" href="assets/img/favicon.svg" />
   <link rel="preload" href="assets/fonts/ibm-plex-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin />
@@ -90,6 +90,7 @@
           <div class="legend-chips">
             <span class="chip"><i style="background:var(--ph-color)"></i>Màu nước ∝ pH</span>
             <span class="chip"><i class="dot-salt"></i>Hạt muối ∝ độ mặn</span>
+            <span class="chip"><i style="background:var(--soil-color)"></i>Màu đất ∝ độ ẩm</span>
           </div>
         </div>
         <div class="twin" id="twin">
@@ -163,6 +164,35 @@
         </div>
         <div class="spark" id="sparkSal" aria-label="Biểu đồ độ mặn 24 giờ"></div>
       </article>
+
+      <article class="card sensor sensor--wide" id="card-soil" data-sensor="soil">
+        <div class="card__head">
+          <div class="sensor__id">
+            <span class="sensor__icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" width="22" height="22"><path d="M3 10.5h18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M12 10.5V6m0 0c0-2 1.6-3.4 3.6-3.4C15.6 4.6 14 6 12 6Zm0 0C12 4.3 10.6 3 8.8 3 8.8 4.7 10.2 6 12 6Z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M8.5 10.5v8.2M12 10.5v9.8M15.5 10.5v8.2" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M4 14.5h2M18 14.5h2M5 18h1.5M17.5 18H19" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" opacity=".6"/></svg>
+            </span>
+            <div>
+              <div class="eyebrow">Cảm biến 03 · <span class="model" data-bind="soil.model"></span></div>
+              <h2>Đất bờ ao · 7 chỉ số</h2>
+            </div>
+          </div>
+          <div class="status-badge status-badge--sm" data-status="soil"><span class="status-icon"></span><span class="status-text">--</span></div>
+        </div>
+        <div class="offline-banner" role="status"></div>
+
+        <div class="sensor__body sensor__body--soil">
+          <div class="gauge gauge--soil" id="gaugeSoil"></div>
+          <div class="sensor__readout">
+            <div class="eyebrow">Độ ẩm đất (thể tích)</div>
+            <div class="big-value"><span class="num" id="valSoil">--</span><span class="unit">%</span></div>
+            <div class="delta" id="deltaSoil">--</div>
+            <div class="scale-note" id="noteSoil">--</div>
+            <div class="scale-note" id="rangeSoil"></div>
+            <div class="spark spark--inline" id="sparkSoil" aria-label="Biểu đồ độ ẩm đất 24 giờ"></div>
+          </div>
+          <div class="soil-grid" id="soilGrid"></div>
+        </div>
+      </article>
     </section>
 
     <!-- ============ REALTIME CHARTS ============ -->
@@ -188,8 +218,16 @@
           <div class="chart-title"><i class="swatch swatch--sal"></i>Độ mặn (‰) <small>· vùng xanh: ngưỡng tối ưu</small></div>
           <div class="chart" id="rtSal"></div>
         </div>
+        <div class="chart-block">
+          <div class="chart-title"><i class="swatch swatch--soil"></i>Độ ẩm đất bờ (%) <small>· vùng xanh: ngưỡng tối ưu</small></div>
+          <div class="chart" id="rtMoist"></div>
+        </div>
+        <div class="chart-block">
+          <div class="chart-title"><i class="swatch swatch--soil"></i>pH đất bờ <small>· vùng xanh: ngưỡng tối ưu</small></div>
+          <div class="chart" id="rtSoilPh"></div>
+        </div>
         <div class="chart-block chart-block--temp">
-          <div class="chart-title"><i class="swatch swatch--temp"></i>Nhiệt độ nước (°C) <small>· cảm biến bù nhiệt tích hợp</small></div>
+          <div class="chart-title"><i class="swatch swatch--temp"></i>Nhiệt độ nước &amp; đất (°C) <small>· nước: cảm biến bù nhiệt · đất: đầu dò 7 trong 1</small></div>
           <div class="chart chart--short" id="rtTemp"></div>
         </div>
       </div>
@@ -203,11 +241,25 @@
           <h2>Lưu trữ đến 6 tháng</h2>
         </div>
         <div class="history__controls">
-          <div class="seg" id="histMetric">
-            <button data-m="ph" class="is-active">pH</button>
-            <button data-m="sal">Độ mặn</button>
-            <button data-m="temp">Nhiệt độ</button>
-          </div>
+          <label class="select">
+            <span class="sr-only">Chỉ số</span>
+            <select id="histMetric" aria-label="Chọn chỉ số">
+              <optgroup label="Nước ao">
+                <option value="ph" selected>pH nước</option>
+                <option value="sal">Độ mặn</option>
+                <option value="temp">Nhiệt độ nước</option>
+              </optgroup>
+              <optgroup label="Đất bờ ao">
+                <option value="moist">Độ ẩm đất</option>
+                <option value="soilPh">pH đất</option>
+                <option value="soilEc">EC đất</option>
+                <option value="soilT">Nhiệt độ đất</option>
+                <option value="N">Đạm (N)</option>
+                <option value="P">Lân (P)</option>
+                <option value="K">Kali (K)</option>
+              </optgroup>
+            </select>
+          </label>
           <div class="seg" id="histRange">
             <button data-d="7">7 ngày</button>
             <button data-d="30" class="is-active">1 tháng</button>
@@ -233,10 +285,10 @@
           <div class="cal-legend" id="calLegend"></div>
         </div>
         <div class="table-wrap">
-          <div class="chart-title">Thống kê theo ngày</div>
+          <div class="chart-title">Thống kê theo ngày <small>· trung bình ngày, di chuột để xem thấp – cao</small></div>
           <div class="table-scroll">
             <table class="data-table" id="dailyTable">
-              <thead><tr><th>Ngày</th><th>pH TB</th><th>pH thấp–cao</th><th>Mặn TB ‰</th><th>Mặn thấp–cao</th><th>Nhiệt °C</th></tr></thead>
+              <thead><tr><th>Ngày</th><th>pH</th><th>Mặn ‰</th><th>Nước °C</th><th>Ẩm đất %</th><th>pH đất</th><th>EC đất</th></tr></thead>
               <tbody></tbody>
             </table>
           </div>
@@ -268,6 +320,7 @@
         <div class="pipeline" aria-label="Kiến trúc truyền dữ liệu">
           <span class="pipe-node">Đầu dò pH</span>
           <span class="pipe-node">Đầu dò độ mặn</span>
+          <span class="pipe-node">Đầu dò đất 7 trong 1</span>
           <span class="pipe-arrow">RS485 · Modbus RTU</span>
           <span class="pipe-node pipe-node--hub">Gateway IoT</span>
           <span class="pipe-arrow">4G / Wi-Fi · MQTT</span>
@@ -299,7 +352,7 @@
       </div>
       <div class="footer__meta">
         <span>© <span id="year"></span> ARL × REMIT Industry Lab</span>
-        <span>AquaSense v1.0 · Giám sát chất lượng nước</span>
+        <span>AquaSense v2.1 · Giám sát nước &amp; đất bờ ao</span>
       </div>
     </div>
   </footer>

@@ -1,6 +1,13 @@
 # AquaSense – Dashboard giám sát chất lượng nước
 
-Dashboard theo dõi **pH** và **độ mặn** của ao nuôi tôm nước lợ theo thời gian thực.
+Dashboard theo dõi ao nuôi tôm nước lợ theo thời gian thực bằng 3 cảm biến:
+
+| # | Cảm biến | Model | Modbus ID | Đo |
+|---|---|---|---|---|
+| 01 | pH nước | ES-PH-WT-01 | 01 | pH, nhiệt độ nước |
+| 02 | Độ mặn | EC/SAL RS485 | 02 | Độ mặn ‰, EC, nhiệt độ nước |
+| 03 | Đất 7 trong 1 (bờ ao) | ES-SOIL-7-IN-1 | 03 | Độ ẩm, nhiệt độ, EC, pH đất, N, P, K |
+
 Thực hiện bởi **Applied Robotics Lab (ARL) – Đại học Greenwich Việt Nam** và **Industry Lab – Viện REMIT**.
 
 Có hai phiên bản, dùng chung một giao diện:
@@ -54,7 +61,7 @@ Dữ liệu (trạng thái cảm biến, nhật ký điều khiển, PIN tự t�
 | GET | `/api/events` | Server-Sent Events: đẩy trạng thái mỗi khi có thay đổi |
 | POST | `/api/login` | `{ "pin": "…" }` → cookie phiên (HttpOnly, SameSite=Strict) |
 | POST | `/api/logout` | Đăng xuất |
-| POST | `/api/sensors/ph` · `/api/sensors/sal` | `{ "on": true/false }` (cần đăng nhập) |
+| POST | `/api/sensors/ph` · `/api/sensors/sal` · `/api/sensors/soil` | `{ "on": true/false }` (cần đăng nhập) |
 
 Các lệnh POST cần header `X-Requested-With: aquasense` để chống CSRF. Nhập sai PIN quá 8 lần trong 10 phút sẽ bị khoá tạm.
 
@@ -81,6 +88,7 @@ Chạy thử trên máy: `python -m http.server 8000`.
 |---|---|
 | `Alt + 1` | Bật / tắt cảm biến pH |
 | `Alt + 2` | Bật / tắt cảm biến độ mặn |
+| `Alt + 3` | Bật / tắt cảm biến đất 7 trong 1 |
 | `Ctrl + Alt + K` | Mở hộp thoại cài đặt phím (phím ẩn) |
 
 - **Bản máy chủ**: phím gửi lệnh lên máy chủ. Trình duyệt phải đã đăng nhập tại `/control/` (dùng chung phiên), nếu chưa thì phím không có tác dụng.
@@ -90,7 +98,7 @@ Chạy thử trên máy: `python -m http.server 8000`.
 
 Khi một cảm biến bị tắt:
 - Dashboard chuyển cảm biến đó sang **ngoại tuyến**: thẻ chuyển xám và hiện giá trị cuối, kim đồng hồ về 0.
-- Thanh trạng thái hiện "1/2 cảm biến", WQI chỉ tính trên dữ liệu còn lại.
+- Thanh trạng thái hiện số cảm biến còn hoạt động (ví dụ "2/3 cảm biến"). WQI chỉ tính trên dữ liệu nước còn lại; cảm biến đất không tính vào WQI.
 - Biểu đồ đứt quãng và có vùng "Ngoại tuyến"; nhật ký ghi sự kiện mất kết nối / kết nối lại.
 
 ---
@@ -119,9 +127,35 @@ Dockerfile, docker-compose.yml
 
 - **Nền**: giấy ấm `#f3f2ee`, chữ mực `#15202b`; màu thương hiệu xanh ARL `#185292`. Nền tối dùng xanh mực, không dùng neon.
 - **Font**: IBM Plex Sans / IBM Plex Mono, hỗ trợ đầy đủ dấu tiếng Việt.
-- **Màu dữ liệu**: pH `#2b5fb4`, độ mặn `#00917f`, nhiệt độ `#c2621a`. Đã kiểm tra độ phân biệt cho người mù màu, cả nền sáng lẫn nền tối.
+- **Màu dữ liệu**: pH `#2b5fb4`, độ mặn `#00917f`, nhiệt độ `#c2621a`, cảm biến đất `#a23b72`. Đã kiểm tra độ phân biệt cho người mù màu, cả nền sáng lẫn nền tối. Màu nâu đất bị loại vì lẫn với màu cam của nhiệt độ.
 - **Màu trạng thái**: Tối ưu / Cảnh báo / Nguy hiểm. Luôn đi kèm biểu tượng và chữ, không dựa vào màu đơn thuần.
-- **Màu theo số liệu**: màu nước trong mô hình đổi theo pH; vạch trạng thái và biểu tượng cảm biến đổi theo số đo.
+- **Màu theo số liệu**: màu nước trong mô hình đổi theo pH; màu đất bờ đổi theo độ ẩm; vạch trạng thái và biểu tượng cảm biến đổi theo số đo.
+
+## Cảm biến đất bờ ao
+
+Đầu dò ES-SOIL-7-IN-1 cắm ở bờ ao, sâu khoảng 20 cm (vị trí ghi trong `config.js` → `sensors.soil.location`).
+Lý do đặt ở bờ thay vì đáy ao: dải EC của đầu dò chỉ đến 10 000 µS/cm, trong khi bùn đáy ao nước lợ (độ mặn ~15 ‰) có EC trên 20 000 µS/cm, sẽ vượt thang đo.
+
+Ở bờ ao, cảm biến theo dõi:
+- **pH đất**: bờ ao vùng ĐBSCL thường là đất phèn. pH đất thấp thì mưa dễ rửa phèn xuống ao, làm pH nước giảm.
+- **Độ ẩm**: đất quá ẩm sau mưa dễ sạt lở, rò rỉ; quá khô thì nứt bờ.
+- **EC**: theo dõi đất bờ nhiễm mặn.
+
+Ngưỡng nằm trong `config.js` → `thresholds` (`moist`, `soilT`, `soilPh`, `soilEc`, `N`, `P`, `K`). N, P, K chưa có tiêu chuẩn cho bờ ao nuôi tôm, nên dashboard ghi là "mức tham chiếu".
+
+Bảng thanh ghi Modbus (theo trang sản phẩm epcb.vn):
+
+| Thanh ghi | Nội dung | Đơn vị |
+|---|---|---|
+| `0x0006` | pH | 0.01 pH |
+| `0x0012` | Độ ẩm | 0.1 % |
+| `0x0013` | Nhiệt độ | 0.1 °C |
+| `0x0015` | EC | 1 µS/cm |
+| `0x001E` · `0x001F` · `0x0020` | N · P · K | mg/kg |
+| `0x0100` | Địa chỉ thiết bị (0–255) | đọc/ghi |
+| `0x0101` | Tốc độ baud (2400/4800/9600) | đọc/ghi |
+
+Cả 3 cảm biến dùng chung một bus RS485, nên phải đổi địa chỉ đầu dò đất sang **03** (thanh ghi `0x0100`) trước khi nối chung.
 
 ## Kết nối cảm biến thật
 

@@ -14,6 +14,7 @@
   const ACTIONS = [
     { id: 'toggle-ph',  label: 'Bật / tắt cảm biến pH',      sensor: 'ph' },
     { id: 'toggle-sal', label: 'Bật / tắt cảm biến độ mặn',  sensor: 'sal' },
+    { id: 'toggle-soil', label: 'Bật / tắt cảm biến đất 7 trong 1', sensor: 'soil' },
     { id: 'open-binder', label: 'Mở hộp thoại cài đặt phím', required: true }
   ];
 
@@ -80,7 +81,7 @@
   // ---------- actions ----------
   function announce(k, on) {
     const sc = C.sensors[k];
-    const name = k === 'ph' ? 'pH' : 'độ mặn';
+    const name = { ph: 'pH', sal: 'độ mặn', soil: 'đất 7 trong 1' }[k] || k;
     toast(on ? 'info' : 'critical',
       on ? `Cảm biến ${name} đã kết nối lại` : `Mất kết nối cảm biến ${name}`,
       `${sc.model} · Modbus ID ${String(sc.address).padStart(2, '0')}`);

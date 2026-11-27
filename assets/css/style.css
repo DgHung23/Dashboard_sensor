@@ -21,6 +21,7 @@
   /* data-driven tokens (app.js sets these from the live readings) */
   --ph-color: #1f8f86;
   --sal-color: #1f7fa6;
+  --soil-color: #9a7144;
   --status-color: #2e7d4f;
 
   --font: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
@@ -56,6 +57,7 @@
   --series-ph: #2b5fb4;
   --series-sal: #00917f;
   --series-temp: #c2621a;
+  --series-soil: #a23b72;
   --good: #2e7d4f;
   --warn: #c48a0e;
   --critical: #b8342b;
@@ -86,6 +88,7 @@
   --series-ph: #5b8fdc;
   --series-sal: #1fa88c;
   --series-temp: #d97a3a;
+  --series-soil: #b9558c;
   --good: #46a571;
   --warn: #c28c20;
   --critical: #dd5163;
@@ -243,6 +246,8 @@ h2 { margin: 0; font-size: 1.06rem; font-weight: 600; letter-spacing: -.012em; }
 .sensor { overflow: hidden; }
 #card-ph { --accent: var(--ph-color); --series: var(--series-ph); }
 #card-sal { --accent: var(--sal-color); --series: var(--series-sal); }
+#card-soil { --accent: var(--soil-color); --series: var(--series-soil); }
+.sensor--wide { grid-column: 1 / -1; }
 .sensor__id { display: flex; align-items: center; gap: 12px; }
 .sensor__icon {
   width: 40px; height: 40px; border-radius: 8px; display: grid; place-items: center; flex: none;
@@ -276,6 +281,25 @@ h2 { margin: 0; font-size: 1.06rem; font-weight: 600; letter-spacing: -.012em; }
 .mini-stats dd { margin: 0; font-weight: 600; font-size: .94rem; font-variant-numeric: tabular-nums; }
 
 .spark { height: 70px; margin: 14px -6px -6px; }
+.spark--inline { height: 56px; margin: 10px 0 0; }
+
+/* soil card: gauge · moisture readout · six-reading grid */
+.sensor__body--soil { grid-template-columns: minmax(200px, 260px) minmax(220px, .9fr) minmax(0, 1.7fr); }
+.sensor__body--soil .eyebrow { margin-bottom: 4px; }
+.soil-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); border: 1px solid var(--border); border-radius: 8px; overflow: hidden; align-self: stretch; }
+.soil-m { display: flex; flex-direction: column; gap: 4px; padding: 12px 14px; border-right: 1px solid var(--border); border-bottom: 1px solid var(--border); min-width: 0; }
+.soil-m:nth-child(3n) { border-right: 0; }
+.soil-m:nth-last-child(-n + 3) { border-bottom: 0; }
+.soil-m__k { font-size: .74rem; color: var(--text-3); }
+.soil-m__v { display: flex; align-items: baseline; gap: 5px; }
+.soil-m__v b { font-size: 1.45rem; font-weight: 600; letter-spacing: -.02em; font-variant-numeric: tabular-nums; line-height: 1.1; }
+.soil-m__v small { font-size: .76rem; color: var(--text-2); }
+.soil-m__v .status-icon { margin-left: auto; align-self: center; width: 15px; height: 15px; font-size: 9px; }
+.soil-bar { position: relative; height: 6px; border-radius: 3px; background: var(--grid); margin-top: 4px; }
+.soil-bar__opt { position: absolute; top: 0; bottom: 0; border-radius: 3px; background: color-mix(in srgb, var(--good) 30%, transparent); }
+.soil-bar__dot { position: absolute; top: 50%; width: 10px; height: 10px; margin: -5px 0 0 -5px; border-radius: 50%; border: 2px solid var(--surface); background: var(--good); box-shadow: 0 0 0 1px var(--border-strong); transition: left 1.2s var(--ease), background .5s, opacity .5s; }
+.sensor.is-offline .soil-grid { filter: grayscale(1); opacity: .55; }
+.sensor.is-offline .spark--inline { filter: grayscale(.8); opacity: .55; }
 
 /* ---------- Controls ---------- */
 .seg { display: inline-flex; padding: 2px; gap: 2px; border-radius: 8px; background: var(--surface-2); border: 1px solid var(--border); }
@@ -291,6 +315,16 @@ h2 { margin: 0; font-size: 1.06rem; font-weight: 600; letter-spacing: -.012em; }
   transition: background .2s, transform .15s;
 }
 .btn:hover { background: var(--surface-2); }
+.select { position: relative; display: inline-flex; }
+.select select {
+  appearance: none; -webkit-appearance: none; cursor: pointer;
+  font: inherit; font-size: .8rem; font-weight: 500; color: var(--text);
+  padding: 7px 32px 7px 12px; border-radius: 8px; border: 1px solid var(--border-strong); background: var(--surface);
+}
+.select::after { content: ""; position: absolute; right: 12px; top: 50%; width: 7px; height: 7px; margin-top: -5px; border-right: 1.6px solid var(--text-2); border-bottom: 1.6px solid var(--text-2); transform: rotate(45deg); pointer-events: none; }
+.select select:hover { background: var(--surface-2); }
+.select optgroup { font-weight: 600; }
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
 .btn:active { transform: translateY(1px); }
 
 /* ---------- Charts ---------- */
@@ -302,6 +336,7 @@ h2 { margin: 0; font-size: 1.06rem; font-weight: 600; letter-spacing: -.012em; }
 .swatch--ph { background: var(--series-ph); }
 .swatch--sal { background: var(--series-sal); }
 .swatch--temp { background: var(--series-temp); }
+.swatch--soil { background: var(--series-soil); }
 .chart { width: 100%; height: 250px; }
 .chart--short { height: 170px; }
 .chart--tall { height: 370px; }
@@ -349,7 +384,7 @@ h2 { margin: 0; font-size: 1.06rem; font-weight: 600; letter-spacing: -.012em; }
 .alert p { margin: 2px 0 0; font-size: .78rem; color: var(--text-2); }
 .alert time { font-family: var(--mono); font-size: .72rem; color: var(--text-3); white-space: nowrap; text-align: right; }
 
-.device-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.device-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 250px), 1fr)); gap: 12px; }
 .device { border: 1px solid var(--border); border-radius: 8px; padding: 14px; background: var(--surface-2); }
 .device__head { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 10px; gap: 8px; }
 .device__head strong { font-size: .92rem; font-weight: 600; }
@@ -485,6 +520,8 @@ h2 { margin: 0; font-size: 1.06rem; font-weight: 600; letter-spacing: -.012em; }
   .kpi:nth-child(3) { border-right: 0; }
   .kpi:nth-child(-n + 3) { border-bottom: 1px solid var(--border); }
   .hist-lower { grid-template-columns: minmax(0, 1fr); }
+  .sensor__body--soil { grid-template-columns: minmax(200px, 1fr) 1.1fr; }
+  .sensor__body--soil .soil-grid { grid-column: 1 / -1; }
 }
 @media (max-width: 860px) {
   .topbar__inner { padding: 8px 16px; gap: 12px; }
@@ -500,7 +537,12 @@ h2 { margin: 0; font-size: 1.06rem; font-weight: 600; letter-spacing: -.012em; }
   .card { padding: 16px; }
   .status-card { display: flex; text-align: center; }
   .status-card .status-badge { align-self: center; }
-  .sensor__body { grid-template-columns: 1fr; }
+  .sensor__body, .sensor__body--soil { grid-template-columns: 1fr; }
+  .soil-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .soil-m:nth-child(3n) { border-right: 1px solid var(--border); }
+  .soil-m:nth-child(2n) { border-right: 0; }
+  .soil-m:nth-last-child(-n + 3) { border-bottom: 1px solid var(--border); }
+  .soil-m:nth-last-child(-n + 2) { border-bottom: 0; }
   .gauge { max-width: 300px; margin: 0 auto; }
   .hist-kpis { grid-template-columns: 1fr 1fr; }
   .kpi { border-bottom: 1px solid var(--border); }
@@ -527,6 +569,6 @@ h2 { margin: 0; font-size: 1.06rem; font-weight: 600; letter-spacing: -.012em; }
 /* phone: every control at least 44px tall (thumb-sized) */
 @media (max-width: 620px) {
   .seg button { min-height: 44px; padding: 0 12px; }
-  .btn, .icon-btn { min-height: 44px; }
+  .btn, .icon-btn, .select select { min-height: 44px; }
   .icon-btn { width: 44px; }
 }

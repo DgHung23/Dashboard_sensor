@@ -8,6 +8,7 @@
   const NS = 'http://www.w3.org/2000/svg';
   const W = 900, H = 400;
   const WATER_TOP = 150, WATER_BOTTOM = 372, TANK_L = 40, TANK_R = 560;
+  const DYKE_L = 584, DYKE_R = 892, SOIL_TOP = 300, SOIL_X = 770;
 
   const el = (tag, attrs = {}, parent) => {
     const n = document.createElementNS(NS, tag);
@@ -21,7 +22,7 @@
     state: { ph: 7.8, sal: 15, temp: 29, phColor: '#2bb5a0', salColor: '#1f9bd1' },
 
     mount(host) {
-      const svg = el('svg', { viewBox: `0 0 ${W} ${H}`, preserveAspectRatio: 'xMidYMid meet', role: 'img', 'aria-label': 'Mô hình mô phỏng bể quan trắc với hai đầu dò pH và độ mặn' });
+      const svg = el('svg', { viewBox: `0 0 ${W} ${H}`, preserveAspectRatio: 'xMidYMid meet', role: 'img', 'aria-label': 'Mô hình mô phỏng ao quan trắc với đầu dò pH, độ mặn trong nước và đầu dò đất 7 trong 1 trên bờ ao' });
       host.appendChild(svg);
       this.svg = svg;
 
@@ -78,6 +79,9 @@
       }
       el('text', { x: 4, y: WATER_TOP - 12 }, ruler).textContent = 'm';
 
+      // ---- Pond dyke (bờ ao) with the 7-in-1 soil probe ----
+      this.dyke(svg);
+
       // ---- Probes ----
       this.probePh = this.probe(svg, 210, 'pH', 'var(--series-ph)');
       this.probeSal = this.probe(svg, 390, 'EC', 'var(--series-sal)');
@@ -86,6 +90,7 @@
       const cab = el('g', { fill: 'none', 'stroke-width': 3, 'stroke-linecap': 'round' }, svg);
       this.cablePh = el('path', { d: 'M210 92 C 210 40, 600 40, 660 150', stroke: 'var(--text-3)', opacity: .55 }, cab);
       this.cableSal = el('path', { d: 'M390 92 C 390 60, 600 70, 660 160', stroke: 'var(--text-3)', opacity: .55 }, cab);
+      this.cableSoil = el('path', { d: `M${SOIL_X} ${SOIL_TOP - 26} C ${SOIL_X} 238, 700 246, 694 208`, stroke: 'var(--text-3)', opacity: .55 }, cab);
       this.cableUp = el('path', { d: 'M712 120 C 730 70, 770 60, 800 70', stroke: 'var(--text-3)', opacity: .35, 'stroke-dasharray': '4 6' }, cab);
 
       // ---- Gateway box ----
@@ -138,6 +143,45 @@
       return { g, glow, x };
     },
 
+    // cross-section of the dyke: topsoil colour follows soil moisture, water drops ∝ moisture
+    dyke(svg) {
+      const g = el('g', {}, svg);
+      const top = `M${DYKE_L} ${SOIL_TOP + 14} C ${DYKE_L + 40} ${SOIL_TOP - 2}, ${DYKE_L + 120} ${SOIL_TOP + 4}, ${DYKE_L + 190} ${SOIL_TOP - 2} S ${DYKE_R - 30} ${SOIL_TOP + 2}, ${DYKE_R} ${SOIL_TOP - 4}`;
+      el('defs', {}, g).innerHTML = `<clipPath id="tw-dyke"><path d="${top} V ${WATER_BOTTOM + 8} H ${DYKE_L} Z"/></clipPath>`;
+      const body = el('g', { 'clip-path': 'url(#tw-dyke)' }, g);
+      this.soilTop = el('rect', { x: DYKE_L, y: SOIL_TOP - 10, width: DYKE_R - DYKE_L, height: 62, fill: '#9a7144' }, body);
+      this.soilTop.style.transition = 'fill 1.2s';
+      el('rect', { x: DYKE_L, y: SOIL_TOP + 50, width: DYKE_R - DYKE_L, height: 70, fill: '#5d4630', opacity: .9 }, body);
+      el('path', { d: `M${DYKE_L} ${SOIL_TOP + 50} C ${DYKE_L + 90} ${SOIL_TOP + 44}, ${DYKE_L + 200} ${SOIL_TOP + 58}, ${DYKE_R} ${SOIL_TOP + 48}`, fill: 'none', stroke: '#000', opacity: .12, 'stroke-width': 2 }, body);
+      // soil grains / water drops
+      this.drops = [];
+      for (let i = 0; i < 26; i++) {
+        const d = el('circle', { cx: DYKE_L + 12 + ((i * 53) % (DYKE_R - DYKE_L - 24)), cy: SOIL_TOP + 14 + ((i * 29) % 76), r: 1.6 + (i % 3) * .5, fill: '#cfe6ff', opacity: 0 }, body);
+        d.style.transition = 'opacity 1s';
+        this.drops.push(d);
+      }
+      el('path', { d: top, fill: 'none', stroke: '#4f7a3a', 'stroke-width': 3, 'stroke-linecap': 'round' }, g);
+      // grass tufts on the dyke
+      const grass = el('g', { stroke: '#4f7a3a', 'stroke-width': 1.6, 'stroke-linecap': 'round', fill: 'none' }, g);
+      [604, 640, 676, 716, 820, 852, 878].forEach((x, i) => {
+        const y = SOIL_TOP + (i < 2 ? 6 : 0) - 1;
+        el('path', { d: `M${x} ${y} l -4 -9 M${x} ${y} l 1 -11 M${x} ${y} l 5 -8` }, grass);
+      });
+      el('text', { x: DYKE_L + 6, y: WATER_BOTTOM + 20, 'font-size': 10, fill: 'var(--text-3)', 'font-family': 'IBM Plex Sans, sans-serif' }, g).textContent = 'Bờ ao';
+      // the probe: head above ground, three steel prongs at ~20 cm
+      const p = el('g', {}, g);
+      el('rect', { x: SOIL_X - 14, y: SOIL_TOP - 26, width: 28, height: 30, rx: 5, fill: 'var(--surface-solid)', stroke: 'var(--series-soil)', 'stroke-width': 1.5 }, p);
+      el('text', { x: SOIL_X, y: SOIL_TOP - 8, 'text-anchor': 'middle', 'font-size': 8, 'font-weight': 800, fill: 'var(--series-soil)' }, p).textContent = '7in1';
+      [-8, 0, 8].forEach(dx => el('rect', { x: SOIL_X + dx - 1.5, y: SOIL_TOP + 4, width: 3, height: 44, rx: 1.5, fill: '#b8c0c6', stroke: '#7d868d', 'stroke-width': .6 }, p));
+      const glow = el('circle', { cx: SOIL_X, cy: SOIL_TOP + 34, r: 22, fill: 'url(#tw-glow)', opacity: 0 }, p);
+      this.probeSoil = { g: p, glow, x: SOIL_X };
+      // readout tag (two lines)
+      const tg = el('g', { transform: `translate(${SOIL_X + 26} ${SOIL_TOP - 64})` }, svg);
+      el('rect', { x: 0, y: 0, width: 92, height: 40, rx: 8, fill: 'var(--surface-solid)', stroke: 'var(--series-soil)', 'stroke-width': 1.2, opacity: .95 }, tg);
+      this.tagSoil = el('text', { x: 46, y: 18, 'text-anchor': 'middle', 'font-size': 13, 'font-weight': 700, 'font-family': 'IBM Plex Sans, sans-serif', fill: 'var(--text)' }, tg);
+      this.tagSoil2 = el('text', { x: 46, y: 32, 'text-anchor': 'middle', 'font-size': 10, 'font-family': 'IBM Plex Sans, sans-serif', fill: 'var(--text-2)' }, tg);
+    },
+
     tag(svg, x, y, color) {
       const g = el('g', { transform: `translate(${x} ${y})` }, svg);
       el('rect', { x: 0, y: 0, width: 78, height: 30, rx: 8, fill: 'var(--surface-solid)', stroke: color, 'stroke-width': 1.2, opacity: .95 }, g);
@@ -149,32 +193,40 @@
       Object.assign(this.state, s);
       const st = this.state;
       document.getElementById('tw-w1')?.setAttribute('stop-color', st.phColor);
-      const on = st.online || { ph: true, sal: true };
+      const on = st.online || { ph: true, sal: true, soil: true };
       this.tagPh.textContent = on.ph && st.ph != null ? `${st.ph.toFixed(2)} pH` : 'OFFLINE';
       this.tagSal.textContent = on.sal && st.sal != null ? `${st.sal.toFixed(1)} ‰` : 'OFFLINE';
+      const soilOk = on.soil && st.moist != null;
+      this.tagSoil.textContent = soilOk ? `Ẩm ${st.moist.toFixed(1)} %` : 'OFFLINE';
+      this.tagSoil2.textContent = soilOk && st.soilPh != null ? `pH đất ${st.soilPh.toFixed(2)}` : 'Đất bờ ao';
       this.tempText.textContent = st.temp != null ? `Nhiệt độ ${st.temp.toFixed(1)} °C` : 'Nhiệt độ -- °C';
+      // topsoil darkens as it gets wetter; water drops show between the grains
+      if (st.soilColor) this.soilTop.setAttribute('fill', st.soilColor);
+      const wet = soilOk ? Math.max(0, Math.min(1, (st.moist - 10) / 45)) : 0;
+      this.drops.forEach((d, i) => d.setAttribute('opacity', i < Math.round(wet * this.drops.length) ? .75 : 0));
       // offline probes fade out, their cable goes dark
-      this.probePh.g.style.transition = this.probeSal.g.style.transition = 'opacity .8s';
-      this.probePh.g.style.opacity = on.ph ? 1 : .3;
-      this.probeSal.g.style.opacity = on.sal ? 1 : .3;
-      this.cablePh.setAttribute('stroke-dasharray', on.ph ? '' : '3 7');
-      this.cableSal.setAttribute('stroke-dasharray', on.sal ? '' : '3 7');
-      const n = (on.ph ? 1 : 0) + (on.sal ? 1 : 0);
-      this.gwText.textContent = n === 2 ? 'RS485 OK' : n === 1 ? 'RS485 1/2' : 'NO SIGNAL';
-      this.gwText.setAttribute('fill', n === 2 ? 'var(--good)' : n === 1 ? 'var(--warn)' : 'var(--critical)');
+      [[this.probePh, this.cablePh, on.ph], [this.probeSal, this.cableSal, on.sal], [this.probeSoil, this.cableSoil, on.soil]].forEach(([p, c, ok]) => {
+        p.g.style.transition = 'opacity .8s';
+        p.g.style.opacity = ok ? 1 : .3;
+        c.setAttribute('stroke-dasharray', ok ? '' : '3 7');
+      });
+      const n = (on.ph ? 1 : 0) + (on.sal ? 1 : 0) + (on.soil ? 1 : 0);
+      this.gwText.textContent = n === 3 ? 'RS485 OK' : n > 0 ? `RS485 ${n}/3` : 'NO SIGNAL';
+      this.gwText.setAttribute('fill', n === 3 ? 'var(--good)' : n > 0 ? 'var(--warn)' : 'var(--critical)');
       // salt particle count proportional to salinity (0–40‰ → 0–160); unknown salinity keeps the last state
       if (on.sal && st.sal != null) this.saltVisible = Math.round(Math.max(0, Math.min(1, st.sal / 40)) * this.particles.length);
     },
 
     pulse(online) {
-      const on = online || this.state.online || { ph: true, sal: true };
-      if (!on.ph && !on.sal) return;
+      const on = online || this.state.online || { ph: true, sal: true, soil: true };
+      if (!on.ph && !on.sal && !on.soil) return;
       // light probes, then send packets along cables
-      [[this.probePh, on.ph], [this.probeSal, on.sal]].forEach(([p, ok], i) => {
+      [[this.probePh, on.ph], [this.probeSal, on.sal], [this.probeSoil, on.soil]].forEach(([p, ok], i) => {
         if (ok) p.glow.animate([{ opacity: 0 }, { opacity: .9 }, { opacity: 0 }], { duration: 1200, delay: i * 150, easing: 'ease-out' });
       });
       if (on.ph) this.sendPacket(this.cablePh, 'var(--series-ph)', 200);
       if (on.sal) this.sendPacket(this.cableSal, 'var(--series-sal)', 350);
+      if (on.soil) this.sendPacket(this.cableSoil, 'var(--series-soil)', 500);
       setTimeout(() => {
         this.gwLeds.forEach((l, i) => l.animate([{ opacity: .4 }, { opacity: 1 }, { opacity: .4 }], { duration: 400, delay: i * 120, iterations: 2 }));
         this.waves.forEach((w, i) => w.animate([{ opacity: 0 }, { opacity: .9 }, { opacity: 0 }], { duration: 900, delay: i * 160 }));

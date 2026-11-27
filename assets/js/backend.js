@@ -6,7 +6,7 @@
      state kept in this browser only (same behaviour as before).
    ========================================================= */
 (function () {
-  const { Sensors, Store } = window.AQData;
+  const { Sensors, Store, SENSORS } = window.AQData;
   // api/ sits at the site root, next to assets/ (works from / and from /control/, and under a sub-path)
   const API = (() => {
     try { return new URL('../../api/', document.currentScript.src).pathname; } catch (e) { return 'api/'; }
@@ -64,12 +64,12 @@
   // apply a state snapshot from the server; `initial` = first load (no toasts)
   function applyState(state, initial) {
     if (!state) return;
-    const before = { ph: Sensors.isOn('ph'), sal: Sensors.isOn('sal') };
+    const before = Object.fromEntries(SENSORS.map(k => [k, Sensors.isOn(k)]));
     const from = Sensors.replace(state.intervals);
     if (typeof state.authed === 'boolean') Backend.authed = state.authed;
     if (Array.isArray(state.log)) Backend.log = state.log;
     if (Store.slots.length && isFinite(from)) Store.remaskFrom(from);
-    const changes = ['ph', 'sal'].filter(k => Sensors.isOn(k) !== before[k]).map(k => ({ sensor: k, on: Sensors.isOn(k) }));
+    const changes = SENSORS.filter(k => Sensors.isOn(k) !== before[k]).map(k => ({ sensor: k, on: Sensors.isOn(k) }));
     emit({ type: 'state', initial, changes, state });
   }
 

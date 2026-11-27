@@ -3,7 +3,7 @@
    ========================================================= */
 (function () {
   const C = window.AQ_CONFIG;
-  const { Store, Sensors, STEP, DAY, TZ, rainOfDay, localDayIndex } = window.AQData;
+  const { Store, Sensors, SENSORS, STEP, DAY, TZ, rainOfDay, localDayIndex } = window.AQData;
   const $ = id => document.getElementById(id);
   const root = document.documentElement;
   const css = name => getComputedStyle(root).getPropertyValue(name).trim();
@@ -17,7 +17,8 @@
   const fmtDM = t => { const d = L(t); return `${pad2(d.getUTCDate())}/${pad2(d.getUTCMonth() + 1)}`; };
   const fmtDMY = t => { const d = L(t); return `${fmtDM(t)}/${d.getUTCFullYear()}`; };
   const WEEKDAYS = ['Chủ nhật', 'Thứ 2', 'Thứ 3', 'Thứ 4', 'Thứ 5', 'Thứ 6', 'Thứ 7'];
-  const fmtInt = v => Math.round(v).toLocaleString('vi-VN');
+  // thousands with a narrow space (1 800), never a dot that reads like a decimal next to 7.90 pH
+  const fmtInt = v => String(Math.round(v)).replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
   const fx = (v, d, unit = '') => v == null ? '—' : v.toFixed(d) + unit;
   function fmtDur(ms) {
     const m = Math.max(1, Math.round(ms / 60000));
@@ -26,14 +27,28 @@
     if (h < 24) return `${h} giờ ${m % 60} phút`;
     return `${Math.floor(h / 24)} ngày ${h % 24} giờ`;
   }
-  const SENSOR_NAME = { ph: 'pH', sal: 'độ mặn' };
+  const SENSOR_NAME = { ph: 'pH', sal: 'độ mặn', soil: 'đất 7 trong 1' };
+  const NS_TOTAL = SENSORS.length;
 
   // ---------- metric metadata ----------
+  // tone = series colour (the probe that measures it); span/step = minimum y-range and rounding; ax = axis decimals
   const METRIC = {
-    ph:   { label: 'pH',        unit: 'pH', unitShort: '',   dec: 2, series: '--series-ph' },
-    sal:  { label: 'Độ mặn',    unit: '‰',  unitShort: '‰',  dec: 2, series: '--series-sal' },
-    temp: { label: 'Nhiệt độ',  unit: '°C', unitShort: '°C', dec: 1, series: '--series-temp' }
+    ph:     { label: 'pH',              unit: 'pH',    dec: 2, tone: 'ph',   sensor: 'ph',   span: .5,  step: .1,  ax: 1 },
+    sal:    { label: 'Độ mặn',          unit: '‰',     dec: 2, tone: 'sal',  sensor: 'sal',  span: 2,   step: .5,  ax: 1 },
+    temp:   { label: 'Nhiệt độ nước',   unit: '°C',    dec: 1, tone: 'temp', sensor: null,   span: 2,   step: .5,  ax: 1 },
+    moist:  { label: 'Độ ẩm đất',       unit: '%',     dec: 1, tone: 'soil', sensor: 'soil', span: 6,   step: 1,   ax: 0 },
+    soilT:  { label: 'Nhiệt độ đất',    unit: '°C',    dec: 1, tone: 'soil', sensor: 'soil', span: 2,   step: .5,  ax: 1 },
+    soilPh: { label: 'pH đất',          unit: 'pH',    dec: 2, tone: 'soil', sensor: 'soil', span: .6,  step: .1,  ax: 1 },
+    soilEc: { label: 'EC đất',          unit: 'µS/cm', dec: 0, tone: 'soil', sensor: 'soil', span: 400, step: 100, ax: 0 },
+    N:      { label: 'Đạm (N)',         unit: 'mg/kg', dec: 0, tone: 'soil', sensor: 'soil', span: 10,  step: 5,   ax: 0 },
+    P:      { label: 'Lân (P)',         unit: 'mg/kg', dec: 0, tone: 'soil', sensor: 'soil', span: 6,   step: 2,   ax: 0 },
+    K:      { label: 'Kali (K)',        unit: 'mg/kg', dec: 0, tone: 'soil', sensor: 'soil', span: 20,  step: 10,  ax: 0 }
   };
+  // N, P, K have no aquaculture standard: they are judged against reference levels, not "optimal" ones
+  const isRef = m => m === 'N' || m === 'P' || m === 'K';
+  const optLabel = m => isRef(m) ? 'Trong mức tham chiếu' : 'Thời gian đạt tối ưu';
+  // numbers ≥ 1000 get a thousands separator (EC in µS/cm)
+  const fmtV = (v, d) => v == null ? '—' : d === 0 && Math.abs(v) >= 1000 ? fmtInt(v) : v.toFixed(d);
   const LEVEL = {
     good:     { label: 'Tối ưu',    icon: '✓', color: '--good',     rank: 0 },
     warn:     { label: 'Cảnh báo',  icon: '!', color: '--warn',     rank: 1 },
@@ -84,8 +99,11 @@
   // muted, print-like indicator colours (no neon)
   const PH_STOPS = [[0, '#b8342b'], [3, '#c8612a'], [5, '#c49a2c'], [6.3, '#8ea23f'], [7, '#4a9460'], [7.8, '#1f8f86'], [8.6, '#2b6fae'], [10, '#34539c'], [12, '#3b4387'], [14, '#3a3573']];
   const SAL_STOPS = [[0, '#9cc7d1'], [8, '#55a3b6'], [18, '#1f7fa6'], [30, '#1d5a8f'], [40, '#1b3f6e']];
+  // soil moisture: dry sandy clay → saturated dark loam
+  const MOIST_STOPS = [[0, '#dcc8a0'], [15, '#c4a06a'], [30, '#9a7144'], [45, '#6e4c2c'], [60, '#4a321e'], [100, '#2e1f14']];
   const phColor = v => ramp(PH_STOPS, v);
   const salColor = v => ramp(SAL_STOPS, v);
+  const moistColor = v => ramp(MOIST_STOPS, v);
 
   // ---------- animation helpers ----------
   // tween keyed by owner object: a newer tween on the same owner cancels the older one
@@ -106,7 +124,7 @@
   function countTo(el, to, dec, dur = 1100) {
     const from = el._shown ?? (to * .6);
     el._v = to;
-    tween(from, to, dur, v => { el._shown = v; el.textContent = v.toFixed(dec); }, el);
+    tween(from, to, dur, v => { el._shown = v; el.textContent = fmtV(v, dec); }, el);
   }
   function setBadge(el, level, text) {
     const L0 = LEVEL[level];
@@ -220,9 +238,10 @@
       text: css('--text'), text2: css('--text-2'), text3: css('--text-3'), grid: css('--grid'),
       border: css('--border-strong'), surface: css('--surface-solid'),
       good: css('--good'), warn: css('--warn'), critical: css('--critical'),
-      ph: css('--series-ph'), sal: css('--series-sal'), temp: css('--series-temp')
+      ph: css('--series-ph'), sal: css('--series-sal'), temp: css('--series-temp'), soil: css('--series-soil')
     };
   }
+  const tone = (T, m) => T[METRIC[m].tone];
   function tooltipBase(T) {
     return {
       trigger: 'axis', confine: true,
@@ -245,12 +264,15 @@
   function niceRange(values, metric, padFrac = .18) {
     values = values.filter(v => v != null);
     if (!values.length) values = [...C.thresholds[metric].optimal];
-    let lo = Math.min(...values), hi = Math.max(...values);
-    const minSpan = { ph: .5, sal: 2, temp: 2 }[metric];
+    const vmin = Math.min(...values);
+    let lo = vmin, hi = Math.max(...values);
+    const minSpan = METRIC[metric].span;
     if (hi - lo < minSpan) { const m = (lo + hi) / 2; lo = m - minSpan / 2; hi = m + minSpan / 2; }
     const p = (hi - lo) * padFrac;
-    const step = { ph: .1, sal: .5, temp: .5 }[metric];
-    return [Math.floor((lo - p) / step) * step, Math.ceil((hi + p) / step) * step];
+    const step = METRIC[metric].step;
+    lo = Math.floor((lo - p) / step) * step;
+    if (lo < 0 && vmin >= 0) lo = 0;
+    return [lo, Math.ceil((hi + p) / step) * step];
   }
   function bandAreas(metric, yMin, yMax, T) {
     const th = C.thresholds[metric];
@@ -280,10 +302,11 @@
     const T = theme();
     const pts = Store.since(rtHours * 3600000);
     const rains = rainsBetween(pts[0].t, pts[pts.length - 1].t);
-    [['rtPh', 'ph'], ['rtSal', 'sal'], ['rtTemp', 'temp']].forEach(([id, m]) => {
-      const vals = pts.map(s => s[m]);
+    [['rtPh', 'ph'], ['rtSal', 'sal'], ['rtMoist', 'moist'], ['rtSoilPh', 'soilPh'], ['rtTemp', 'temp']].forEach(([id, m]) => {
+      const twoTemps = m === 'temp';           // water + soil temperature share one °C axis
+      const vals = pts.map(s => s[m]).concat(twoTemps ? pts.map(s => s.soilT) : []);
       const [y0, y1] = niceRange(vals, m);
-      const color = T[m];
+      const color = tone(T, m);
       const marks = bandAreas(m, y0, y1, T);
       rains.forEach(r => marks.push([{ xAxis: X(Math.max(r.start, pts[0].t)), itemStyle: { color: alpha(T.text3, .12) }, label: { show: true, formatter: 'Mưa', color: T.text3, fontSize: 10, position: 'insideTop' } }, { xAxis: X(Math.min(r.end, pts[pts.length - 1].t)) }]));
       offlineSpans(m, pts[0].t, Date.now()).forEach(([a, b]) => marks.push([{ xAxis: X(a), itemStyle: { color: alpha(T.critical, .1) }, label: { show: true, formatter: 'Ngoại tuyến', color: T.critical, fontSize: 10, position: 'insideTop' } }, { xAxis: X(b) }]));
@@ -294,6 +317,8 @@
         tooltip: { ...tooltipBase(T), formatter: p => {
           const s = Store.at(p[0].value[0] - TZ);
           const head = `<div style="font-size:11px;opacity:.7">${WEEKDAYS[L(s.t).getUTCDay()]}, ${fmtHM(s.t)} · ${fmtDMY(s.t)}</div>`;
+          if (twoTemps) return head + [['temp', 'Nước', T.temp], ['soilT', 'Đất', T.soil]].map(([k, n, c]) =>
+            `<div style="margin-top:4px"><i style="display:inline-block;width:10px;height:3px;background:${c};vertical-align:middle;margin-right:6px"></i>${n} <b style="font-variant-numeric:tabular-nums;font-size:14px">${s[k] == null ? '—' : s[k].toFixed(1)}</b> °C</div>`).join('');
           if (s[m] == null) return head + '<div style="margin-top:4px;opacity:.8">Không có dữ liệu · cảm biến ngoại tuyến</div>';
           const lv = classify(m, s[m]);
           return `${head}
@@ -301,9 +326,10 @@
             <span style="margin-left:8px;color:${T[lv === 'good' ? 'good' : lv]};font-weight:700">${LEVEL[lv].icon} ${LEVEL[lv].label}</span></div>
             ${s.rain ? '<div style="font-size:11px;opacity:.7;margin-top:2px">Đang có mưa</div>' : ''}`;
         } },
-        ...axes(T, y0, y1, m === 'ph' ? 1 : 1),
+        ...axes(T, y0, y1, METRIC[m].ax),
+        legend: twoTemps ? { show: true, top: 0, right: 8, itemWidth: 14, itemHeight: 3, icon: 'rect', textStyle: { color: T.text2, fontSize: 11, fontFamily: 'IBM Plex Sans' }, data: ['Nước', 'Đất'] } : { show: false },
         series: [{
-          type: 'line', name: METRIC[m].label, showSymbol: false, smooth: .2, sampling: 'lttb',
+          type: 'line', name: twoTemps ? 'Nước' : METRIC[m].label, showSymbol: false, smooth: .2, sampling: 'lttb',
           data: pts.map(s => [X(s.t), s[m]]),
           lineStyle: { width: 2, color }, itemStyle: { color }, areaStyle: { color: gradientArea(color) },
           markArea: { silent: true, data: marks },
@@ -311,13 +337,17 @@
           markPoint: { symbol: 'circle', symbolSize: 9, itemStyle: { color, borderColor: T.surface, borderWidth: 2 },
             label: { show: false }, data: lastPt ? [{ coord: [X(lastPt.t), lastPt[m]] }] : [],
             animation: true }
-        }]
+        }].concat(twoTemps ? [{
+          type: 'line', name: 'Đất', showSymbol: false, smooth: .2, sampling: 'lttb',
+          data: pts.map(s => [X(s.t), s.soilT]), z: 1,
+          lineStyle: { width: 2, color: T.soil }, itemStyle: { color: T.soil }
+        }] : [])
       }, true);
     });
   }
   // offline intervals affecting a metric, clipped to [t0, t1]
   function offlineSpans(m, t0, t1) {
-    const keys = m === 'temp' ? [] : [m];   // temperature keeps coming from the other probe
+    const keys = METRIC[m].sensor ? [METRIC[m].sensor] : [];   // water temperature keeps coming from the other probe
     const out = [];
     keys.forEach(k => Sensors.intervals[k].forEach(([a, b]) => {
       const end = b == null ? t1 : b;
@@ -337,14 +367,14 @@
   function renderSparks() {
     const T = theme();
     const pts = Store.since(DAY);
-    [['sparkPh', 'ph'], ['sparkSal', 'sal']].forEach(([id, m]) => {
-      const color = T[m];
+    [['sparkPh', 'ph'], ['sparkSal', 'sal'], ['sparkSoil', 'moist']].forEach(([id, m]) => {
+      const color = tone(T, m);
       const vals = pts.map(s => s[m]);
       const [y0, y1] = niceRange(vals, m, .1);
       chart(id).setOption({
         useUTC: true, animationDuration: 900,
         grid: { left: 0, right: 0, top: 6, bottom: 0 },
-        tooltip: { ...tooltipBase(T), formatter: p => `${fmtHM(p[0].value[0] - TZ)} · ${p[0].value[1] == null ? 'không có dữ liệu' : `<b style="font-family:JetBrains Mono">${p[0].value[1].toFixed(METRIC[m].dec)}</b> ${METRIC[m].unit}`}` },
+        tooltip: { ...tooltipBase(T), formatter: p => `${fmtHM(p[0].value[0] - TZ)} · ${p[0].value[1] == null ? 'không có dữ liệu' : `${METRIC[m].label} <b style="font-variant-numeric:tabular-nums">${p[0].value[1].toFixed(METRIC[m].dec)}</b> ${METRIC[m].unit}`}` },
         xAxis: { type: 'time', show: false }, yAxis: { type: 'value', show: false, min: y0, max: y1 },
         series: [{ type: 'line', showSymbol: false, smooth: .3, data: pts.map(s => [X(s.t), s[m]]),
           lineStyle: { width: 2, color }, areaStyle: { color: gradientArea(color) } }]
@@ -361,7 +391,7 @@
     const ms = histDays * DAY;
     const agg = Store.aggregate(ms, BUCKET[histDays]);
     const raw = Store.since(ms);
-    const color = T[m];
+    const color = tone(T, m);
 
     // KPIs from raw 5-minute data
     let sum = 0, n = 0, mn = Infinity, mx = -Infinity, tmn = 0, tmx = 0, good = 0;
@@ -375,12 +405,12 @@
     const dayCount = new Set(raw.map(s => localDayIndex(s.t))).size;
     const missing = raw.length - n;
     $('histKpis').innerHTML = (n ? [
-      ['Trung bình', (sum / n).toFixed(meta.dec), meta.unit],
-      ['Thấp nhất', mn.toFixed(meta.dec), `${fmtHM(tmn)} · ${fmtDM(tmn)}`],
-      ['Cao nhất', mx.toFixed(meta.dec), `${fmtHM(tmx)} · ${fmtDM(tmx)}`],
-      ['Thời gian đạt tối ưu', (good / n * 100).toFixed(1) + '%', `${fmtInt(n)} bản ghi${missing ? ` · thiếu ${fmtInt(missing)}` : ''}`],
+      ['Trung bình', fmtV(sum / n, meta.dec), meta.unit],
+      ['Thấp nhất', fmtV(mn, meta.dec), `${fmtHM(tmn)} · ${fmtDM(tmn)}`],
+      ['Cao nhất', fmtV(mx, meta.dec), `${fmtHM(tmx)} · ${fmtDM(tmx)}`],
+      [optLabel(m), (good / n * 100).toFixed(1) + '%', `${fmtInt(n)} bản ghi${missing ? ` · thiếu ${fmtInt(missing)}` : ''}`],
       ['Ngày có cảnh báo', `${dayMap.size}`, `/ ${dayCount} ngày`]
-    ] : [['Trung bình', '—', ''], ['Thấp nhất', '—', ''], ['Cao nhất', '—', ''], ['Thời gian đạt tối ưu', '—', 'không có dữ liệu'], ['Ngày có cảnh báo', '—', '']])
+    ] : [['Trung bình', '—', ''], ['Thấp nhất', '—', ''], ['Cao nhất', '—', ''], [optLabel(m), '—', 'không có dữ liệu'], ['Ngày có cảnh báo', '—', '']])
       .map(([k, v, s]) => `<div class="kpi"><span>${k}</span><b>${v}</b> <small>${s}</small></div>`).join('');
 
     const allVals = agg.flatMap(a => [a[m].min, a[m].max]);
@@ -393,12 +423,12 @@
         const a = agg[p[0].dataIndex]; if (!a) return '';
         if (a[m].avg == null) return `<div style="font-size:11px;opacity:.7">${fmtB(a.t)}</div><div style="margin-top:4px;opacity:.8">Không có dữ liệu · cảm biến ngoại tuyến</div>`;
         const lv = classify(m, a[m].avg);
-        return `<div style="font-size:11px;opacity:.7">${fmtB(a.t)}</div>
-          <div style="margin-top:4px">TB <b style="font-variant-numeric:tabular-nums;font-size:15px">${a[m].avg.toFixed(meta.dec)}</b> ${meta.unit}
+        return `<div style="font-size:11px;opacity:.7">${fmtB(a.t)} · ${meta.label}</div>
+          <div style="margin-top:4px">TB <b style="font-variant-numeric:tabular-nums;font-size:15px">${fmtV(a[m].avg, meta.dec)}</b> ${meta.unit}
           <span style="margin-left:6px;color:${T[lv === 'good' ? 'good' : lv]};font-weight:700">${LEVEL[lv].icon} ${LEVEL[lv].label}</span></div>
-          <div style="font-size:11px;opacity:.75">Thấp nhất ${a[m].min.toFixed(meta.dec)} · Cao nhất ${a[m].max.toFixed(meta.dec)}</div>`;
+          <div style="font-size:11px;opacity:.75">Thấp nhất ${fmtV(a[m].min, meta.dec)} · Cao nhất ${fmtV(a[m].max, meta.dec)}</div>`;
       } },
-      ...axes(T, y0, y1, m === 'ph' ? 1 : 1),
+      ...axes(T, y0, y1, meta.ax),
       dataZoom: [
         { type: 'inside', throttle: 30 },
         { type: 'slider', height: 26, bottom: 14, borderColor: T.border, backgroundColor: 'transparent',
@@ -453,28 +483,27 @@
         if (!d) { html += '<div class="cal-cell empty"></div>'; continue; }
         if (!d.n) { html += `<div class="cal-cell nodata" data-k="${k}" data-none="1"></div>`; continue; }
         const r = d.g / d.n;
-        html += `<div class="cal-cell" style="background:${RAMP[binOf(r)]}" data-k="${k}" data-r="${r.toFixed(3)}" data-a="${(d.sum / d.n).toFixed(METRIC[m].dec)}" data-mn="${d.min.toFixed(METRIC[m].dec)}" data-mx="${d.max.toFixed(METRIC[m].dec)}"></div>`;
+        html += `<div class="cal-cell" style="background:${RAMP[binOf(r)]}" data-k="${k}" data-r="${r.toFixed(3)}" data-a="${fmtV(d.sum / d.n, METRIC[m].dec)}" data-mn="${fmtV(d.min, METRIC[m].dec)}" data-mx="${fmtV(d.max, METRIC[m].dec)}"></div>`;
       }
     }
     host.innerHTML = html;
     host.scrollLeft = host.scrollWidth; // newest weeks first on narrow screens
-    $('calTitle').textContent = `Tỷ lệ thời gian đạt ngưỡng tối ưu mỗi ngày · ${METRIC[m].label} · 6 tháng`;
+    $('calTitle').textContent = `Tỷ lệ thời gian ${isRef(m) ? 'trong mức tham chiếu' : 'đạt ngưỡng tối ưu'} mỗi ngày · ${METRIC[m].label} · 6 tháng`;
     $('calLegend').innerHTML = 'Thấp ' + RAMP.map((c, i) => `<i style="background:${c}" title="${['< 40%', '40–70%', '70–90%', '90–99%', '100%'][i]}"></i>`).join('') + ' Cao <span style="margin-left:8px">(&lt;40% · 40–70% · 70–90% · 90–99% · 100%)</span>';
   }
 
   function renderTable() {
     const rows = Store.aggregate(histDays * DAY, DAY).reverse();
-    const cell = (m, v, d) => {
-      if (v == null) return '<td style="color:var(--text-3)">—</td>';
-      const lv = classify(m, v);
-      return `<td>${v.toFixed(d)}${lv !== 'good' ? ` <span title="${LEVEL[lv].label}" style="color:var(${LEVEL[lv].color});font-weight:800">${LEVEL[lv].icon}</span>` : ''}</td>`;
+    // daily mean; the low–high range of the day is in the cell's tooltip
+    const cell = (m, a, d) => {
+      if (a.avg == null) return '<td style="color:var(--text-3)">—</td>';
+      const lv = classify(m, a.avg);
+      return `<td title="${METRIC[m].label}: thấp ${fmtV(a.min, d)} – cao ${fmtV(a.max, d)} ${METRIC[m].unit}">${fmtV(a.avg, d)}${lv !== 'good' ? ` <span title="${LEVEL[lv].label}" style="color:var(${LEVEL[lv].color});font-weight:800">${LEVEL[lv].icon}</span>` : ''}</td>`;
     };
-    const rng = (a, d) => a.min == null ? '<td style="color:var(--text-3)">—</td>' : `<td>${a.min.toFixed(d)} – ${a.max.toFixed(d)}</td>`;
     $('dailyTable').querySelector('tbody').innerHTML = rows.map(r => `<tr>
       <td title="${WEEKDAYS[L(r.t + 12 * 3600000).getUTCDay()]}, ${fmtDMY(r.t + 12 * 3600000)}">${['CN','T2','T3','T4','T5','T6','T7'][L(r.t + 12 * 3600000).getUTCDay()]} · ${fmtDM(r.t + 12 * 3600000)}</td>
-      ${cell('ph', r.ph.avg, 2)}${rng(r.ph, 2)}
-      ${cell('sal', r.sal.avg, 2)}${rng(r.sal, 1)}
-      ${cell('temp', r.temp.avg, 1)}</tr>`).join('');
+      ${cell('ph', r.ph, 2)}${cell('sal', r.sal, 2)}${cell('temp', r.temp, 1)}
+      ${cell('moist', r.moist, 1)}${cell('soilPh', r.soilPh, 2)}${cell('soilEc', r.soilEc, 0)}</tr>`).join('');
   }
 
   // =========================================================
@@ -485,7 +514,7 @@
     const span = 14 * DAY;
     const hourly = Store.aggregate(span, 3600000);
     // threshold transitions on hourly means
-    ['ph', 'sal', 'temp'].forEach(m => {
+    ['ph', 'sal', 'temp', 'moist', 'soilPh', 'soilEc'].forEach(m => {
       // hysteresis: a new state must persist >= 3 consecutive hours to be logged
       let prev = null;
       hourly.forEach((h, i) => {
@@ -499,9 +528,13 @@
           if (lv === 'good') { title = `${meta.label} trở lại ngưỡng tối ưu`; level = 'info'; }
           else {
             const below = v < th.optimal[0];
-            title = `${meta.label} ${below ? 'thấp hơn' : 'vượt'} ngưỡng ${lv === 'critical' ? 'cho phép' : 'tối ưu'}`;
+            title = m === 'soilPh' && below ? 'pH đất bờ thấp – nguy cơ rửa phèn xuống ao'
+              : m === 'moist' && !below ? 'Đất bờ quá ẩm – theo dõi sạt lở, rò rỉ'
+              : m === 'moist' ? 'Đất bờ khô – nguy cơ nứt bờ'
+              : m === 'soilEc' && !below ? 'Đất bờ nhiễm mặn tăng'
+              : `${meta.label} ${below ? 'thấp hơn' : 'vượt'} ngưỡng ${lv === 'critical' ? 'cho phép' : 'tối ưu'}`;
           }
-          out.push({ t: h.t, level, title, desc: `Trung bình giờ: ${v.toFixed(meta.dec)} ${meta.unit} · ngưỡng tối ưu ${th.optimal[0]} – ${th.optimal[1]} ${meta.unit}` });
+          out.push({ t: h.t, level, title, desc: `Trung bình giờ: ${fmtV(v, meta.dec)} ${meta.unit} · ngưỡng tối ưu ${fmtV(th.optimal[0], meta.dec ? 1 : 0)} – ${fmtV(th.optimal[1], meta.dec ? 1 : 0)} ${meta.unit}` });
           prev = lv;
         }
       });
@@ -511,13 +544,21 @@
     for (let d = localDayIndex(now - span); d <= localDayIndex(now); d++) {
       const ev = rainOfDay(d);
       if (!ev || ev.start > now || ev.start < now - span) continue;
-      const before = Store.at(ev.start - 5 * 60000).sal;
-      if (before == null) continue;
-      let minAfter = before;
-      for (let t = ev.start; t <= Math.min(now, ev.start + 12 * 3600000); t += STEP) { const v = Store.at(t).sal; if (v != null) minAfter = Math.min(minAfter, v); }
-      const drop = before - minAfter;
+      const b0 = Store.at(ev.start - 5 * 60000);
+      const before = b0.sal, moist0 = b0.moist;
+      if (before == null && moist0 == null) continue;
+      let minAfter = before, maxMoist = moist0;
+      for (let t = ev.start; t <= Math.min(now, ev.start + 12 * 3600000); t += STEP) {
+        const x = Store.at(t);
+        if (before != null && x.sal != null) minAfter = Math.min(minAfter, x.sal);
+        if (moist0 != null && x.moist != null) maxMoist = Math.max(maxMoist, x.moist);
+      }
+      const drop = before != null ? before - minAfter : 0;
+      const parts = [];
+      if (before != null) parts.push(`Độ mặn giảm ${drop.toFixed(2)} ‰ trong 12 giờ (${before.toFixed(1)} → ${minAfter.toFixed(1)} ‰)`);
+      if (moist0 != null) parts.push(`độ ẩm đất bờ ${moist0.toFixed(1)} → ${maxMoist.toFixed(1)} %`);
       out.push({ t: ev.start, level: drop >= 1.2 ? 'warn' : 'info', title: drop >= 1.2 ? 'Độ mặn giảm nhanh do mưa' : 'Ghi nhận mưa tại khu vực ao',
-        desc: `Độ mặn giảm ${drop.toFixed(2)} ‰ trong 12 giờ (${before.toFixed(1)} → ${minAfter.toFixed(1)} ‰)` });
+        desc: parts.join(' · ') });
     }
     // daily pH swing (QCVN: ≤ 0.5/ngày)
     Store.aggregate(span, DAY).forEach(dd => {
@@ -530,7 +571,7 @@
     });
     // sensor connection events
     const nowReal = Date.now();
-    ['ph', 'sal'].forEach(k => Sensors.intervals[k].forEach(([a, , r]) => {
+    SENSORS.forEach(k => Sensors.intervals[k].forEach(([a, , r]) => {
       const sc = C.sensors[k];
       if (a >= nowReal - span) out.push({ t: a, level: 'critical', title: `Mất kết nối cảm biến ${SENSOR_NAME[k]}`,
         desc: `Không nhận được phản hồi từ ${sc.model} · Modbus ID ${pad2(sc.address)}` });
@@ -559,16 +600,19 @@
     const s = Store.latest();
     const installT = Date.parse(C.installDate + 'T00:00:00+07:00');
     const records = Math.floor((s.t - installT) / STEP) + 1;
-    $('deviceGrid').innerHTML = ['ph', 'sal'].map(k => {
+    $('deviceGrid').innerHTML = SENSORS.map(k => {
       const d = C.sensors[k];
       const cal = Date.parse(C.lastCalibration[k] + 'T00:00:00+07:00');
       const daysSince = Math.floor((s.t - cal) / DAY);
       const left = C.calibrationIntervalDays - daysSince;
       const on = Sensors.isOn(k);
-      const lastOk = Store.lastValid(k);
+      const lastOk = Store.lastValid({ ph: 'ph', sal: 'sal', soil: 'moist' }[k]);
       const raw = !on ? '<span style="color:var(--critical)">Không có phản hồi (timeout)</span>'
-        : k === 'ph' ? `${s.ph.toFixed(2)} pH · ${s.temp.toFixed(1)} °C` : `${s.sal.toFixed(2)} ‰ · ${s.ec.toFixed(2)} mS/cm`;
+        : k === 'ph' ? `${s.ph.toFixed(2)} pH · ${s.temp.toFixed(1)} °C`
+        : k === 'sal' ? `${s.sal.toFixed(2)} ‰ · ${s.ec.toFixed(2)} mS/cm`
+        : `${s.moist.toFixed(1)} % · ${s.soilT.toFixed(1)} °C · ${fmtV(s.soilEc, 0)} µS/cm`;
       const live = [['Giá trị thô', raw]];
+      if (d.location) live.unshift(['Vị trí', d.location]);
       if (!on) live.push(['Ngoại tuyến từ', `${fmtHM(Sensors.offSince(k))} · ${fmtDM(Sensors.offSince(k))}`]);
       return `<div class="device${on ? '' : ' is-offline'}">
         <div class="device__head"><div><strong>${d.name}</strong><div class="model">${d.model} · Modbus ID ${pad2(d.address)}</div></div><span class="online${on ? '' : ' is-off'}">${on ? 'ONLINE' : 'OFFLINE'}</span></div>
@@ -589,9 +633,43 @@
   let firstPaint = true;
   const OFF_COLOR = '#8b949c';
   const CARD = {
-    ph:  { val: 'valPh',  delta: 'deltaPh',  dec: 2, unit: '',   blank: '-.--' },
-    sal: { val: 'valSal', delta: 'deltaSal', dec: 2, unit: ' ‰', blank: '--.--' }
+    ph:   { val: 'valPh',   delta: 'deltaPh',   dec: 2, unit: '',   blank: '-.--',  metric: 'ph' },
+    sal:  { val: 'valSal',  delta: 'deltaSal',  dec: 2, unit: ' ‰', blank: '--.--', metric: 'sal' },
+    soil: { val: 'valSoil', delta: 'deltaSoil', dec: 1, unit: ' %', blank: '--.-',  metric: 'moist' }
   };
+  // the six other readings of the 7-in-1 soil probe, with the scale of their position bar
+  const SOIL_SUB = [['soilPh', [3, 9]], ['soilEc', [0, 5000]], ['soilT', [15, 45]], ['N', [0, 150]], ['P', [0, 80]], ['K', [0, 300]]];
+  function buildSoilGrid() {
+    $('soilGrid').innerHTML = SOIL_SUB.map(([m, [a, b]]) => {
+      const th = C.thresholds[m], meta = METRIC[m];
+      const l = clamp((th.optimal[0] - a) / (b - a), 0, 1) * 100, r = clamp((th.optimal[1] - a) / (b - a), 0, 1) * 100;
+      return `<div class="soil-m" id="sm-${m}">
+        <span class="soil-m__k">${meta.label}</span>
+        <span class="soil-m__v"><b data-v>--</b><small>${meta.unit}</small><span class="status-icon" data-lv aria-hidden="true"></span></span>
+        <span class="soil-bar" title="${isRef(m) ? 'Mức tham chiếu' : 'Ngưỡng tối ưu'} ${fmtV(th.optimal[0], meta.dec ? 1 : 0)} – ${fmtV(th.optimal[1], meta.dec ? 1 : 0)} ${meta.unit}"><span class="soil-bar__opt" style="left:${l.toFixed(1)}%;width:${(r - l).toFixed(1)}%"></span><span class="soil-bar__dot" data-dot></span></span>
+      </div>`;
+    }).join('');
+  }
+  function renderSoilGrid(s, on) {
+    SOIL_SUB.forEach(([m, [a, b]]) => {
+      const box = $('sm-' + m), vEl = box.querySelector('[data-v]'), lvEl = box.querySelector('[data-lv]'), dot = box.querySelector('[data-dot]');
+      const v = on ? s[m] : null;
+      if (v == null) {
+        vEl._tw = (vEl._tw || 0) + 1; vEl._shown = undefined; vEl.textContent = '—';
+        lvEl.style.setProperty('--badge', 'var(--text-3)'); lvEl.textContent = '–'; lvEl.title = 'Ngoại tuyến';
+        dot.style.opacity = 0;
+        return;
+      }
+      countTo(vEl, v, METRIC[m].dec);
+      const lv = classify(m, v);
+      lvEl.style.setProperty('--badge', `var(${LEVEL[lv].color})`);
+      lvEl.textContent = LEVEL[lv].icon;
+      lvEl.title = isRef(m) && lv === 'good' ? 'Trong mức tham chiếu' : LEVEL[lv].label;
+      dot.style.opacity = 1;
+      dot.style.left = (clamp((v - a) / (b - a), 0, 1) * 100).toFixed(1) + '%';
+      dot.style.background = `var(${LEVEL[lv].color})`;
+    });
+  }
   function stat24(day, m) {
     let a = 0, n = 0, lo = Infinity, hi = -Infinity;
     day.forEach(x => { const v = x[m]; if (v == null) return; a += v; n++; if (v < lo) lo = v; if (v > hi) hi = v; });
@@ -603,13 +681,13 @@
     const banner = card.querySelector('.offline-banner');
     card.classList.toggle('is-offline', !isOn);
     if (!isOn || value == null) {
-      const since = Sensors.offSince(k), last = Store.lastValid(k);
+      const since = Sensors.offSince(k), last = Store.lastValid(c.metric);
       valEl._tw = (valEl._tw || 0) + 1; valEl._shown = undefined;   // cancel running count-up
       valEl.textContent = c.blank;
       setBadge(badge, 'offline');
       banner.innerHTML = `<span class="offline-banner__icon" aria-hidden="true">⚠</span><div><b>Cảm biến ngoại tuyến</b><span>Không nhận được dữ liệu từ Modbus ID ${pad2(C.sensors[k].address)}${since ? ` kể từ ${fmtHM(since)} · ${fmtDM(since)}` : ''}</span></div>`;
       dEl.className = 'delta flat';
-      dEl.innerHTML = last ? `Giá trị cuối <b>${last[k].toFixed(c.dec)}${c.unit}</b> lúc ${fmtHM(last.t)} · ${fmtDM(last.t)}` : 'Chưa có dữ liệu';
+      dEl.innerHTML = last ? `Giá trị cuối <b>${last[c.metric].toFixed(c.dec)}${c.unit}</b> lúc ${fmtHM(last.t)} · ${fmtDM(last.t)}` : 'Chưa có dữ liệu';
       gauges[k].off(st && st.lo, st && st.hi);
       return;
     }
@@ -618,30 +696,35 @@
     gauges[k].set(value, st && st.lo, st && st.hi);
     if (prevVal != null) setDelta(dEl, value - prevVal, c.dec, c.unit);
     else { dEl.className = 'delta flat'; dEl.textContent = 'Đang đồng bộ lại dữ liệu…'; }
-    setBadge(badge, classify(k, value));
+    setBadge(badge, classify(c.metric, value));
   }
 
   function renderReadouts(animateTwin) {
     const s = Store.latest();
     const prevH = Store.at(s.t - 3600000);
     const day = Store.since(DAY);
-    const on = { ph: Sensors.isOn('ph'), sal: Sensors.isOn('sal') };
-    const P = stat24(day, 'ph'), Sa = stat24(day, 'sal');
+    const on = Object.fromEntries(SENSORS.map(k => [k, Sensors.isOn(k)]));
+    const P = stat24(day, 'ph'), Sa = stat24(day, 'sal'), So = stat24(day, 'moist');
     // what the gateway currently reports
     const cur = {
       ph: on.ph ? s.ph : null, sal: on.sal ? s.sal : null, ec: on.sal ? s.ec : null,
       temp: on.ph || on.sal ? s.temp : null
     };
-    const offCount = (cur.ph == null ? 1 : 0) + (cur.sal == null ? 1 : 0);
+    ['moist', 'soilT', 'soilPh', 'soilEc', 'N', 'P', 'K'].forEach(m => { cur[m] = on.soil ? s[m] : null; });
+    const offCount = SENSORS.filter(k => !on[k]).length;
+    const waterOff = (on.ph ? 0 : 1) + (on.sal ? 0 : 1);
 
     // theme follows the data (offline sensors turn the palette grey)
     const pc = cur.ph != null ? phColor(cur.ph) : OFF_COLOR, sc = cur.sal != null ? salColor(cur.sal) : OFF_COLOR;
+    const mc = cur.moist != null ? moistColor(cur.moist) : OFF_COLOR;
     root.style.setProperty('--ph-color', pc);
     root.style.setProperty('--sal-color', sc);
+    root.style.setProperty('--soil-color', mc);
     const lv = { ph: classify('ph', cur.ph), sal: classify('sal', cur.sal), temp: classify('temp', cur.temp) };
+    // the hero is about the water; the soil probe has its own card
     const quality = ['ph', 'sal', 'temp'].filter(m => cur[m] != null).map(m => lv[m]).sort((a, b) => LEVEL[b].rank - LEVEL[a].rank)[0];
     let overall = quality || 'offline';
-    if (offCount && overall === 'good') overall = 'warn';
+    if (waterOff && overall === 'good') overall = 'warn';
     root.style.setProperty('--status-color', css(LEVEL[overall].color));
     document.querySelector('meta[name="theme-color"]').setAttribute('content', root.getAttribute('data-theme') === 'dark' ? '#16202a' : '#ffffff');
 
@@ -662,14 +745,20 @@
     $('rangeSal').textContent = Sa ? `${Sa.lo.toFixed(1)} – ${Sa.hi.toFixed(1)} ‰` : '—';
     $('tempSal').textContent = on.sal && cur.temp != null ? (cur.temp + .1 * Math.sin(s.t / 7e6)).toFixed(1) + ' °C' : '—';
 
+    // soil card (7-in-1): moisture on the gauge, the six other readings in the grid
+    renderCard('soil', on.soil, cur.moist, prevH.moist, So);
+    $('noteSoil').innerHTML = `Tối ưu <b>${C.thresholds.moist.optimal.join(' – ')} %</b> · ${C.sensors.soil.location}`;
+    $('rangeSoil').textContent = So ? `Biên độ 24h ${So.lo.toFixed(1)} – ${So.hi.toFixed(1)} %` : '';
+    renderSoilGrid(s, on.soil);
+
     // hero
     const wqi = wqiOf(cur);
     const wEl = $('wqiValue');
     if (wqi == null) { wEl._tw = (wEl._tw || 0) + 1; wEl._shown = 0; wEl.textContent = '--'; }
     else tween(wEl._shown ?? 0, wqi, 1400, v => { wEl._shown = v; wEl.textContent = Math.round(v); }, wEl);
     $('wqiArc').style.strokeDashoffset = (527.8 * (1 - (wqi ?? 0) / 100)).toFixed(1);
-    const overallLabel = offCount === 2 ? 'Mất kết nối cảm biến'
-      : offCount === 1 ? 'Thiếu dữ liệu cảm biến'
+    const overallLabel = waterOff === 2 ? 'Mất kết nối cảm biến nước'
+      : waterOff === 1 ? 'Thiếu dữ liệu cảm biến'
       : { good: 'Nguồn nước tối ưu', warn: 'Cần theo dõi', critical: 'Nguy hiểm – cần xử lý' }[overall];
     setBadge($('overallBadge'), overall, overallLabel);
     $('overallDesc').textContent = describe(cur, lv, on);
@@ -677,15 +766,15 @@
 
     // live indicator in the header
     const pill = $('livePill');
-    pill.classList.toggle('is-partial', offCount === 1);
-    pill.classList.toggle('is-down', offCount === 2);
-    pill.querySelector('span:last-child').textContent = offCount === 0 ? 'Trực tuyến' : offCount === 1 ? '1/2 cảm biến' : 'Ngoại tuyến';
+    pill.classList.toggle('is-partial', offCount > 0 && offCount < NS_TOTAL);
+    pill.classList.toggle('is-down', offCount === NS_TOTAL);
+    pill.querySelector('span:last-child').textContent = offCount === 0 ? 'Trực tuyến' : offCount === NS_TOTAL ? 'Ngoại tuyến' : `${NS_TOTAL - offCount}/${NS_TOTAL} cảm biến`;
 
     // twin
-    Twin.update({ ph: cur.ph, sal: cur.sal, temp: cur.temp, phColor: cur.ph != null ? pc : '#5f7783', salColor: sc, online: on });
+    Twin.update({ ph: cur.ph, sal: cur.sal, temp: cur.temp, moist: cur.moist, soilPh: cur.soilPh, phColor: cur.ph != null ? pc : '#5f7783', salColor: sc, soilColor: cur.moist != null ? mc : '#8b7f72', online: on });
     if (animateTwin) Twin.pulse(on);
 
-    if (!firstPaint) ['ph', 'sal'].forEach(k => { if (!on[k]) return; const e = $(CARD[k].val); e.classList.remove('flash'); void e.offsetWidth; e.classList.add('flash'); });
+    if (!firstPaint) SENSORS.forEach(k => { if (!on[k]) return; const e = $(CARD[k].val); e.classList.remove('flash'); void e.offsetWidth; e.classList.add('flash'); });
     firstPaint = false;
   }
   function setDelta(el, d, dec, unit) {
@@ -697,14 +786,19 @@
     const sp = C.station.species;
     const th = C.thresholds;
     const off = ['ph', 'sal'].filter(k => !on[k]);
-    if (off.length === 2) return 'Không nhận được dữ liệu từ cả hai cảm biến. Kiểm tra nguồn cấp, cáp RS485 và gateway.';
+    // one short sentence about the dyke soil, only when it matters
+    let soilTxt = '';
+    if (!on.soil) soilTxt = ' Cảm biến đất bờ đang ngoại tuyến.';
+    else if (cur.soilPh != null && cur.soilPh < th.soilPh.optimal[0]) soilTxt = ` Đất bờ chua (pH ${cur.soilPh.toFixed(2)}) – lưu ý rửa phèn khi mưa.`;
+    else if (cur.moist != null && cur.moist > th.moist.optimal[1]) soilTxt = ` Đất bờ ẩm cao (${cur.moist.toFixed(1)} %) – theo dõi sạt lở.`;
+    if (off.length === 2) return 'Không nhận được dữ liệu từ cả hai cảm biến nước. Kiểm tra nguồn cấp, cáp RS485 và gateway.' + soilTxt;
     const issues = [];
     if (cur.ph != null && lv.ph !== 'good') issues.push(`pH ${cur.ph < th.ph.optimal[0] ? 'thấp' : 'cao'} (${cur.ph.toFixed(2)})`);
     if (cur.sal != null && lv.sal !== 'good') issues.push(`độ mặn ${cur.sal < th.sal.optimal[0] ? 'thấp' : 'cao'} (${cur.sal.toFixed(1)} ‰)`);
     if (cur.temp != null && lv.temp !== 'good') issues.push(`nhiệt độ ${cur.temp < th.temp.optimal[0] ? 'thấp' : 'cao'} (${cur.temp.toFixed(1)} °C)`);
     const offTxt = off.length ? `Cảm biến ${SENSOR_NAME[off[0]]} đang ngoại tuyến – WQI chỉ tính trên dữ liệu còn lại. ` : '';
-    if (!issues.length) return offTxt + (off.length ? `Các chỉ số còn lại nằm trong ngưỡng tối ưu.` : `pH, độ mặn và nhiệt độ đều nằm trong ngưỡng tối ưu cho ${sp}.`);
-    return `${offTxt}Lưu ý: ${issues.join(', ')} so với ngưỡng tối ưu cho ${sp}.`;
+    if (!issues.length) return offTxt + (off.length ? `Các chỉ số còn lại nằm trong ngưỡng tối ưu.` : `pH, độ mặn và nhiệt độ nước đều nằm trong ngưỡng tối ưu cho ${sp}.`) + soilTxt;
+    return `${offTxt}Lưu ý: ${issues.join(', ')} so với ngưỡng tối ưu cho ${sp}.` + soilTxt;
   }
 
   // =========================================================
@@ -738,9 +832,9 @@
   // =========================================================
   function exportCsv() {
     const rows = Store.since(histDays * DAY);
-    const head = 'Thoi gian (GMT+7),pH,Do man (ppt),EC (mS/cm),Nhiet do (C)';
+    const head = 'Thoi gian (GMT+7),pH,Do man (ppt),EC nuoc (mS/cm),Nhiet do nuoc (C),Do am dat (%),Nhiet do dat (C),pH dat,EC dat (uS/cm),N (mg/kg),P (mg/kg),K (mg/kg)';
     const n = (v, d) => v == null ? '' : v.toFixed(d);
-    const lines = rows.map(s => { const d = L(s.t); return `${d.getUTCFullYear()}-${pad2(d.getUTCMonth() + 1)}-${pad2(d.getUTCDate())} ${fmtHM(s.t)},${n(s.ph, 2)},${n(s.sal, 2)},${n(s.ec, 2)},${n(s.temp, 1)}`; });
+    const lines = rows.map(s => { const d = L(s.t); return `${d.getUTCFullYear()}-${pad2(d.getUTCMonth() + 1)}-${pad2(d.getUTCDate())} ${fmtHM(s.t)},${n(s.ph, 2)},${n(s.sal, 2)},${n(s.ec, 2)},${n(s.temp, 1)},${n(s.moist, 1)},${n(s.soilT, 1)},${n(s.soilPh, 2)},${n(s.soilEc, 0)},${n(s.N, 0)},${n(s.P, 0)},${n(s.K, 0)}`; });
     const blob = new Blob(['﻿' + head + '\n' + lines.join('\n')], { type: 'text/csv;charset=utf-8' });
     const a = document.createElement('a');
     const d = L(Date.now());
@@ -773,6 +867,8 @@
 
     gauges.ph = makeGauge($('gaugePh'), { metric: 'ph', colorFn: phColor, ticks: [0, 2, 4, 6, 8, 10, 12, 14], minor: 1, label: 'Thang pH 0 – 14' });
     gauges.sal = makeGauge($('gaugeSal'), { metric: 'sal', colorFn: salColor, ticks: [0, 10, 20, 30, 40], minor: 5, label: 'Độ mặn 0 – 40 ‰' });
+    gauges.soil = makeGauge($('gaugeSoil'), { metric: 'moist', colorFn: moistColor, ticks: [0, 20, 40, 60, 80, 100], minor: 10, label: 'Độ ẩm đất 0 – 100 %' });
+    buildSoilGrid();
     Twin.mount($('twin'));
 
     renderReadouts(false);
@@ -782,7 +878,7 @@
     setTimeout(() => Twin.pulse(), 900);
 
     segmented('rtRange', 'h', v => { rtHours = +v; renderRealtime(); });
-    segmented('histMetric', 'm', v => { histMetric = v; renderHistory(); });
+    $('histMetric').addEventListener('change', e => { histMetric = e.target.value; renderHistory(); });
     segmented('histRange', 'd', v => { histDays = +v; renderHistory(); });
     $('exportCsv').addEventListener('click', exportCsv);
 
@@ -813,7 +909,7 @@
     // sensor switched on/off (keyboard shortcuts, see controls.js)
     window.addEventListener('aq:sensors', e => {
       renderReadouts(false);
-      if (e.detail && e.detail.on) Twin.pulse({ ph: e.detail.sensor === 'ph', sal: e.detail.sensor === 'sal' });
+      if (e.detail && e.detail.on) Twin.pulse(Object.fromEntries(SENSORS.map(k => [k, e.detail.sensor === k])));
       renderSparks(); renderRealtime(); renderHistory(); renderAlerts(); renderDevices();
     });
 

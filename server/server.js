@@ -22,8 +22,8 @@ const SAMPLE_MS = Number(process.env.SAMPLE_MINUTES || 5) * 60 * 1000;
 const SESSION_DAYS = Number(process.env.SESSION_DAYS || 30);
 const TRUST_PROXY = /^(1|true|yes)$/i.test(process.env.TRUST_PROXY || '');
 const HISTORY_MS = 180 * 86400000;
-const SENSORS = ['ph', 'sal'];
-const VERSION = '2.0.0';
+const SENSORS = ['ph', 'sal', 'soil'];
+const VERSION = '2.1.0';
 
 fs.mkdirSync(DATA_DIR, { recursive: true });
 const STATE_FILE = path.join(DATA_DIR, 'state.json');
@@ -56,7 +56,7 @@ const SECRET = loadSecret();
 const PIN_TAG = crypto.createHmac('sha256', SECRET).update('pin:' + PIN).digest('base64url').slice(0, 12);
 
 // ---------- state ----------
-let state = { version: 1, intervals: { ph: [], sal: [] }, log: [] };
+let state = { version: 1, intervals: Object.fromEntries(SENSORS.map(k => [k, []])), log: [] };
 try {
   const raw = JSON.parse(fs.readFileSync(STATE_FILE, 'utf8'));
   SENSORS.forEach(k => { if (Array.isArray(raw?.intervals?.[k])) state.intervals[k] = raw.intervals[k]; });
@@ -255,7 +255,7 @@ async function handle(req, res) {
     return json(res, 200, { ok: true }, { 'Set-Cookie': sessionCookie(req, '', 0) });
   }
 
-  const m = p.match(/^\/api\/sensors\/(ph|sal)$/);
+  const m = p.match(/^\/api\/sensors\/(ph|sal|soil)$/);
   if (m && req.method === 'POST') {
     if (!sameSite(req)) return json(res, 403, { error: 'Yêu cầu không hợp lệ' });
     const session = verify(cookies(req)[COOKIE]);
